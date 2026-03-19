@@ -3,7 +3,7 @@ Declares the classifier interface used to produce triage results from clinical d
 """
 
 from abc import ABC, abstractmethod
-from domain.entities.patient import VitalSigns, TriageResult
+from app.domain.entities.patient import VitalSigns, TriageResult
 from typing import List
 
 class ITriageClassifier(ABC):

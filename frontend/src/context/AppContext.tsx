@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Patient, Alert } from '@/types';
-import { mockPatients, mockAlerts } from '@/data/mockData';
+import { mockAlerts } from '@/data/mockData';
 export interface AppContextType {
     patients: Patient[];
     setPatients: React.Dispatch<React.SetStateAction<Patient[]>>;

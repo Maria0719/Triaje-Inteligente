@@ -2,8 +2,8 @@
 Domain service that coordinates triage classification through the configured classifier port.
 """
 
-from domain.entities.patient import VitalSigns, TriageResult
-from domain.ports.triage_classifier import ITriageClassifier
+from app.domain.entities.patient import VitalSigns, TriageResult
+from app.domain.ports.triage_classifier import ITriageClassifier
 from typing import List
 
 class TriageService:

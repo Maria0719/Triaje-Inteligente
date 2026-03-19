@@ -1,13 +1,14 @@
-"""
+﻿"""
 Implements triage classification using a scikit-learn model and feature extraction logic.
 """
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from domain.entities.patient import VitalSigns, TriageResult
-from domain.ports.triage_classifier import ITriageClassifier
+from app.domain.entities.patient import VitalSigns, TriageResult
+from app.domain.ports.triage_classifier import ITriageClassifier
 from typing import List
-import joblib, os
+import joblib
+import os
 
 SYMPTOM_LIST = [
     "Dolor torácico", "Dificultad respiratoria", "Pérdida de consciencia",
@@ -21,7 +22,8 @@ class SklearnTriageClassifier(ITriageClassifier):
         self._model = self._load_or_train()
 
     def _load_or_train(self):
-        path = "infrastructure/ml/triage_classifier.pkl"
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(BASE_DIR, "triage_classifier.pkl")
         if os.path.exists(path):
             return joblib.load(path)
         from sklearn.datasets import make_classification

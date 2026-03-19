@@ -3,11 +3,11 @@ FastAPI router that exposes the triage classification endpoint.
 """
 
 from fastapi import APIRouter, HTTPException
-from schemas.patient import TriageRequest, TriageResponse
-from domain.entities.patient import VitalSigns
-from infrastructure.ml.sklearn_classifier import SklearnTriageClassifier
-from domain.services.triage_service import TriageService
-from application.use_cases.classify_patient import ClassifyPatientUseCase
+from app.domain.entities.schemas.patient import TriageRequest, TriageResponse
+from app.domain.entities.patient import VitalSigns
+from app.infrastructure.ml.sklearn_classifier import SklearnTriageClassifier
+from app.domain.services.triage_service import TriageService
+from app.application.use_cases.classify_patient import ClassifyPatientUseCase
 
 router = APIRouter(prefix="/api/triage", tags=["triage"])
 

@@ -2,8 +2,8 @@
 Use case that receives patient symptoms and vital signs to return a triage classification result.
 """
 
-from domain.services.triage_service import TriageService
-from domain.entities.patient import VitalSigns, TriageResult
+from app.domain.services.triage_service import TriageService
+from app.domain.entities.patient import VitalSigns, TriageResult
 from typing import List
 
 class ClassifyPatientUseCase:
