@@ -150,7 +150,11 @@ export default function PatientDetailPage() {
 
         {/* Actions */}
         <div className="flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={() => navigate('/patients/new')}>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => navigate('/patients/new', { state: { patient, isUpdate: true } })}
+          >
             <RefreshCw className="h-4 w-4 mr-1" /> Actualizar signos vitales
           </Button>
           <Button className="flex-1 bg-mts-4 hover:bg-mts-4/90 text-primary-foreground" onClick={handleMarkAttended}>

@@ -2,6 +2,7 @@ import { Patient, MTS_CONFIG } from '@/types';
 import { Heart, Thermometer, Wind, Droplets, Clock, Eye, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 
 interface PatientCardProps {
   patient: Patient;
@@ -24,10 +25,24 @@ const mtsBgMap: Record<number, string> = {
   5: 'bg-mts-5-light text-mts-5',
 };
 
+const elapsedMinutesSince = (arrivalTime: Date) => Math.max(0, Math.floor((Date.now() - arrivalTime.getTime()) / 60000));
+
 export default function PatientCard({ patient, onMarkAttended }: PatientCardProps) {
   const navigate = useNavigate();
   const config = MTS_CONFIG[patient.mtsLevel];
-  const waitExceeded = patient.waitTimeMinutes > config.maxWait;
+  const [waitTimeMinutes, setWaitTimeMinutes] = useState(() => elapsedMinutesSince(patient.arrivalTime));
+
+  useEffect(() => {
+    const updateWaitTime = () => {
+      setWaitTimeMinutes(elapsedMinutesSince(patient.arrivalTime));
+    };
+
+    updateWaitTime();
+    const intervalId = window.setInterval(updateWaitTime, 60000);
+    return () => window.clearInterval(intervalId);
+  }, [patient.arrivalTime]);
+
+  const waitExceeded = waitTimeMinutes > config.maxWait;
 
   return (
     <div className={cn(
@@ -61,7 +76,7 @@ export default function PatientCard({ patient, onMarkAttended }: PatientCardProp
           waitExceeded ? "text-destructive" : "text-muted-foreground"
         )}>
           <Clock className="h-4 w-4" />
-          Esperando: {patient.waitTimeMinutes} min
+          Esperando: {waitTimeMinutes} min
           {waitExceeded && <span className="text-xs ml-1">(excede {config.maxWait} min)</span>}
         </span>
 

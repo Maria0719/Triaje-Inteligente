@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 
 const navItems = [
   { title: 'Inicio', path: '/dashboard', icon: LayoutDashboard },
-  { title: 'Pacientes activos', path: '/patients', icon: Users },
+  { title: 'Pacientes activos', path: '/dashboard', icon: Users },
   { title: 'Nuevo triaje', path: '/patients/new', icon: PlusCircle, highlight: true },
   { title: 'Estadísticas', path: '/estadisticas', icon: BarChart3 },
   { title: 'Configuración', path: '/configuracion', icon: Settings },
@@ -35,8 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 py-4 space-y-1 px-2">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || 
-              (item.path === '/dashboard' && location.pathname === '/dashboard') ||
-              (item.path === '/patients' && location.pathname.startsWith('/patients') && location.pathname !== '/patients/new');
+              (item.path === '/dashboard' && location.pathname === '/dashboard');
             return (
               <button
                 key={item.path}

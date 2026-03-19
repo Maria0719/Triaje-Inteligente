@@ -14,11 +14,34 @@ const mtsCircleColors: Record<number, string> = {
   5: 'bg-mts-5',
 };
 
+type TriageResultPatientState = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  docType: Patient['documentType'];
+  docNumber: string;
+  dob: string;
+  age: number | '';
+  sex: Patient['sex'];
+  complaint: string;
+  symptoms: string[];
+  history: string[];
+  painScale: number;
+  vitals: Patient['vitalSigns'];
+};
+
+type TriageResultLocationState = {
+  level: MTSLevel;
+  factors: string[];
+  patient: TriageResultPatientState;
+  isUpdate?: boolean;
+};
+
 export default function TriageResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setPatients } = useApp();
-  const state = location.state as { level: MTSLevel; factors: string[]; patient: any } | null;
+  const state = location.state as TriageResultLocationState | null;
 
   if (!state) {
     navigate('/patients/new');
@@ -29,6 +52,31 @@ export default function TriageResultPage() {
   const config = MTS_CONFIG[level];
 
   const handleAddToQueue = () => {
+    if (state.isUpdate && patient.id) {
+      setPatients(prev => prev.map(p =>
+        p.id === patient.id
+          ? {
+              ...p,
+              firstName: patient.firstName,
+              lastName: patient.lastName,
+              documentType: patient.docType,
+              documentNumber: patient.docNumber,
+              dateOfBirth: patient.dob,
+              age: typeof patient.age === 'number' ? patient.age : p.age,
+              sex: patient.sex,
+              chiefComplaint: patient.complaint || 'No especificado',
+              symptoms: patient.symptoms,
+              medicalHistory: patient.history,
+              painScale: patient.painScale,
+              vitalSigns: patient.vitals,
+              mtsLevel: level,
+            }
+          : p
+      ));
+      navigate('/dashboard');
+      return;
+    }
+
     const newPatient: Patient = {
       id: `P${Date.now()}`,
       firstName: patient.firstName,

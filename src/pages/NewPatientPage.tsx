@@ -1,20 +1,33 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { cn } from '@/lib/utils';
-import { ConsciousnessLevel, Sex, VitalSigns } from '@/types';
-import { classifyPatient } from '@/lib/triage';
+import { ConsciousnessLevel, Patient, Sex, VitalSigns } from '@/types';
+import { TriageApiService } from '@/infrastructure/api/TriageApiService';
+import { ClassifyPatientUseCase } from '@/application/use-cases/ClassifyPatient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
+const triageService = new TriageApiService();
+const classifyUseCase = new ClassifyPatientUseCase(triageService);
 
 const symptomOptions = ['Dolor torácico', 'Dificultad respiratoria', 'Pérdida de consciencia', 'Fiebre', 'Trauma', 'Dolor abdominal', 'Cefalea', 'Vómito', 'Convulsiones', 'Hemorragia', 'Mareo', 'Otros'];
 const historyOptions = ['Hipertensión', 'Diabetes', 'Cardiopatía', 'EPOC', 'Embarazo', 'Anticoagulantes', 'Ninguno'];
 const avpuOptions: ConsciousnessLevel[] = ['Alerta', 'Voz', 'Dolor', 'No responde'];
 const painEmojis = ['😊', '🙂', '😐', '😕', '😟', '😣', '😖', '😫', '😩', '🤯'];
 
+type NewPatientLocationState = {
+  patient?: Patient;
+  isUpdate?: boolean;
+};
+
 export default function NewPatientPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const incomingState = location.state as NewPatientLocationState | null;
+  const incomingPatient = incomingState?.patient;
+  const isUpdate = incomingState?.isUpdate ?? false;
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
@@ -41,6 +54,28 @@ export default function NewPatientPage() {
   const [spo2, setSpo2] = useState('');
   const [avpu, setAvpu] = useState<ConsciousnessLevel>('Alerta');
 
+  useEffect(() => {
+    if (!incomingPatient) return;
+
+    setFirstName(incomingPatient.firstName);
+    setLastName(incomingPatient.lastName);
+    setDocType(incomingPatient.documentType);
+    setDocNumber(incomingPatient.documentNumber);
+    setDob(incomingPatient.dateOfBirth);
+    setSex(incomingPatient.sex);
+    setComplaint(incomingPatient.chiefComplaint);
+    setSymptoms(incomingPatient.symptoms);
+    setHistory(incomingPatient.medicalHistory);
+    setPainScale(incomingPatient.painScale);
+    setSystolicBP(String(incomingPatient.vitalSigns.systolicBP));
+    setDiastolicBP(String(incomingPatient.vitalSigns.diastolicBP));
+    setHeartRate(String(incomingPatient.vitalSigns.heartRate));
+    setRespRate(String(incomingPatient.vitalSigns.respiratoryRate));
+    setTemp(String(incomingPatient.vitalSigns.temperature));
+    setSpo2(String(incomingPatient.vitalSigns.oxygenSaturation));
+    setAvpu(incomingPatient.vitalSigns.consciousnessLevel);
+  }, [incomingPatient]);
+
   const calcAge = (d: string) => {
     if (!d) return '';
     const diff = Date.now() - new Date(d).getTime();
@@ -53,7 +88,7 @@ export default function NewPatientPage() {
     setArr(without.includes(item) ? without.filter(i => i !== item) : [...without, item]);
   };
 
-  const handleClassify = () => {
+ const handleClassify = async () => {
     setLoading(true);
     const vitals: VitalSigns = {
       systolicBP: Number(systolicBP) || 120,
@@ -64,15 +99,28 @@ export default function NewPatientPage() {
       oxygenSaturation: Number(spo2) || 98,
       consciousnessLevel: avpu,
     };
-    setTimeout(() => {
-      const result = classifyPatient(symptoms, vitals, painScale, history);
-      navigate('/triage-result', {
-        state: {
-          ...result,
-          patient: { firstName, lastName, docType, docNumber, dob, age: calcAge(dob), sex, complaint, symptoms, history, painScale, vitals },
+    const result = await classifyUseCase.execute(symptoms, vitals, painScale, history);
+    navigate('/triage-result', {
+      state: {
+        ...result,
+        isUpdate,
+        patient: {
+          id: incomingPatient?.id,
+          firstName,
+          lastName,
+          docType,
+          docNumber,
+          dob,
+          age: calcAge(dob),
+          sex,
+          complaint,
+          symptoms,
+          history,
+          painScale,
+          vitals,
         },
-      });
-    }, 2000);
+      },
+    });
   };
 
   const steps = ['Datos Básicos', 'Evaluación Clínica', 'Signos Vitales'];
