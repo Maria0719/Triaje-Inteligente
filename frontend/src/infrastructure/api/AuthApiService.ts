@@ -31,7 +31,10 @@ export class AuthApiService {
         });
 
         if (!response.ok) {
-            throw await buildError(response, 'Login failed');
+            if (response.status === 401) {
+                throw await buildError(response, 'Correo o contraseña incorrectos');
+            }
+            throw await buildError(response, 'Error al iniciar sesión');
         }
 
         const data = (await response.json()) as LoginResponse;
@@ -43,7 +46,7 @@ export class AuthApiService {
         };
     }
 
-    async register(email: string, password: string, name: string, role: string): Promise<void> {
+    async register(email: string, password: string, name: string, role: string): Promise<LoginResponse> {
         const response = await fetch(`${API_URL}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -51,7 +54,15 @@ export class AuthApiService {
         });
 
         if (!response.ok) {
-            throw await buildError(response, 'Registration failed');
+            throw await buildError(response, 'Error al registrarse');
         }
+
+        const data = (await response.json()) as LoginResponse;
+        return {
+            id: data.id,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+        };
     }
 }

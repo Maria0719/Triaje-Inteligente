@@ -4,6 +4,7 @@ FastAPI router that handles user authentication.
 
 from __future__ import annotations
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -15,15 +16,26 @@ from app.infrastructure.database.repositories import UserRepository
 router = APIRouter()
 
 
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt."""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against its bcrypt hash."""
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     user_repository = UserRepository(db)
     user = user_repository.get_by_email(data.email)
 
-    if user is None or user.hashed_password != data.password:
+    if user is None or not verify_password(data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="Credenciales incorrectas",
         )
 
     return LoginResponse(id=user.id, email=user.email, name=user.name, role=user.role)
@@ -42,7 +54,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
     user = models.User(
         email=data.email,
-        hashed_password=data.password,
+        hashed_password=hash_password(data.password),
         name=data.name,
         role=data.role,
     )

@@ -7,3 +7,4 @@ SQLAlchemy==2.0.48
 alembic==1.18.4
 psycopg2-binary==2.9.11
 python-dotenv==1.0.1
+bcrypt==4.1.2
