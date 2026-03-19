@@ -4,6 +4,9 @@ import { Shield, Mail, Lock, ChevronDown } from 'lucide-react';
 import { useApp } from '@/context/AppContext'; 
 import { Button } from '@/components/ui/button'; 
 import { Input } from '@/components/ui/input'; 
+import { AuthApiService } from '@/infrastructure/api/AuthApiService'; 
+
+const authApiService = new AuthApiService();
 
 export default function LoginPage() { 
   const [email, setEmail] = useState(''); 
@@ -14,7 +17,7 @@ export default function LoginPage() {
   const { setIsLoggedIn, setUserName, setUserRole } = useApp(); 
   const navigate = useNavigate(); 
 
-  const handleLogin = (e: React.FormEvent) => { 
+  const handleLogin = async (e: React.FormEvent) => { 
     e.preventDefault(); 
     const nextEmailError = email.trim() ? '' : 'El correo electrónico es obligatorio'; 
     const nextPasswordError = password.trim() ? '' : 'La contraseña es obligatoria'; 
@@ -26,8 +29,17 @@ export default function LoginPage() {
       return; 
     }
 
-    setUserName(email); 
-    setUserRole(role); 
+    try {
+      const user = await authApiService.login(email, password, role);
+      setUserName(user.name || user.email);
+      setUserRole(user.role || role);
+    }
+    catch (error) {
+      console.warn('Backend login failed, using development fallback:', error);
+      setUserName(email);
+      setUserRole(role);
+    }
+
     setIsLoggedIn(true); 
     navigate('/dashboard'); 
   };

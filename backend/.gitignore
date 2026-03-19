@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 *.pyo
 app/infrastructure/ml/triage_classifier.pkl
+.env
