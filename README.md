@@ -1,73 +1,59 @@
-# Welcome to your Lovable project
+# TriageAI
 
-## Project info
+Sistema de triaje inteligente hospitalario basado en el Sistema de Triaje de Manchester (MTS).
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Estructura del proyecto
+TriageAI/
+├── frontend/   # Aplicación React + TypeScript (Vite)
+└── backend/    # API FastAPI + clasificador ML (Python)
 
-## How can I edit this code?
+## Requisitos previos
 
-There are several ways of editing your application.
+- Node.js 18+ y npm
+- Python 3.10+
+- (Opcional) Un entorno virtual de Python
 
-**Use Lovable**
+## Cómo ejecutar el proyecto
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### 1. Backend
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Mac/Linux
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
 
-Changes made via Lovable will be committed automatically to this repo.
+El backend queda disponible en: http://localhost:8000
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 2. Frontend
+```bash
+cd frontend
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+El frontend queda disponible en: http://localhost:5173
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Arquitectura
 
-**Use GitHub Codespaces**
+Ambos proyectos aplican **arquitectura hexagonal**:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Capa | Frontend | Backend |
+|------|----------|---------|
+| Dominio | `src/domain/` | `app/domain/` |
+| Aplicación | `src/application/` | `app/application/` |
+| Infraestructura | `src/infrastructure/` | `app/infrastructure/` |
 
-## What technologies are used for this project?
+## Variables de entorno
 
-This project is built with:
+Crea el archivo `frontend/.env` con:
+VITE_API_URL=http://localhost:8000
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Un archivo `frontend/.env.example` ya está incluido como referencia.
 
-## How can I deploy this project?
+## Tecnologías
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+**Frontend:** React, TypeScript, Vite, Tailwind CSS, shadcn/ui  
+**Backend:** FastAPI, Uvicorn, scikit-learn, Pydantic
