@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
-from app.infrastructure.api.routes.triage import router as triage_router
-from app.infrastructure.api.routes.patients import router as patients_router
-from app.infrastructure.api.routes.auth import router as auth_router
-from app.infrastructure.database.connection import engine, Base
-from app.infrastructure.database import models
-from app.infrastructure.database.repositories import UserRepository
+from app.routes.triage import router as triage_router
+from app.routes.patients import router as patients_router
+from app.routes.auth import router as auth_router
+from app.database.connection import engine, Base
+from app.database import models
+from app.database.repositories import UserRepository
 import bcrypt
 
 app = FastAPI(title="TriageAI API", version="2.0.0")
