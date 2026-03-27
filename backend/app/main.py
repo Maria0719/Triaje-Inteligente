@@ -4,6 +4,8 @@ from sqlalchemy.orm import sessionmaker
 from app.routes.triage import router as triage_router
 from app.routes.patients import router as patients_router
 from app.routes.auth import router as auth_router
+from app.routes.statistics import router as statistics_router
+from app.routes.alerts import router as alerts_router
 from app.database.connection import engine, Base
 from app.database import models
 from app.database.repositories import UserRepository
@@ -55,6 +57,8 @@ create_default_user()
 app.include_router(triage_router)
 app.include_router(patients_router, prefix="/api/patients", tags=["patients"])
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(statistics_router, prefix="/api/statistics", tags=["statistics"])
+app.include_router(alerts_router, prefix="/api/alerts", tags=["alerts"])
 
 @app.get("/health")
 def health():

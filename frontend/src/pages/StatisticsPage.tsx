@@ -1,35 +1,75 @@
 import AppLayout from '@/components/AppLayout';
 import { Users, AlertTriangle, Clock, CheckCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell, } from 'recharts';
+import {
+  StatisticsApiService,
+  StatisticsByLevelItem,
+  StatisticsSummary,
+  TopComplaintItem,
+  WaitByLevelItem,
+} from '@/infrastructure/api/StatisticsApiService';
+
 const periods = ['Hoy', 'Esta semana', 'Este mes'] as const;
+const statisticsApiService = new StatisticsApiService();
+
+const DEFAULT_SUMMARY: StatisticsSummary = {
+  totalActive: 0,
+  criticalPatients: 0,
+  averageWaitTime: 0,
+  attendedToday: 0,
+};
+
+const DEFAULT_BY_LEVEL: StatisticsByLevelItem[] = [
+  { level: 'Nivel 1', count: 0 },
+  { level: 'Nivel 2', count: 0 },
+  { level: 'Nivel 3', count: 0 },
+  { level: 'Nivel 4', count: 0 },
+  { level: 'Nivel 5', count: 0 },
+];
+
+const DEFAULT_WAIT_BY_LEVEL: WaitByLevelItem[] = [
+  { level: 'Nivel 1', actual: 0, recommended: 0 },
+  { level: 'Nivel 2', actual: 0, recommended: 10 },
+  { level: 'Nivel 3', actual: 0, recommended: 30 },
+  { level: 'Nivel 4', actual: 0, recommended: 60 },
+  { level: 'Nivel 5', actual: 0, recommended: 120 },
+];
+
 export default function StatisticsPage() {
     const [period, setPeriod] = useState<string>('Hoy');
-  // TODO: replace with real API data from /api/statistics
-  const mockStats = {
-    patientsByLevel: [
-      { level: 'Nivel 1', count: 0 },
-      { level: 'Nivel 2', count: 0 },
-      { level: 'Nivel 3', count: 0 },
-      { level: 'Nivel 4', count: 0 },
-      { level: 'Nivel 5', count: 0 },
-    ],
-    volumeByHour: [],
-    topComplaints: [],
-    waitTimeByLevel: [
-      { level: 'Nivel 1', actual: 0, recommended: 0 },
-      { level: 'Nivel 2', actual: 0, recommended: 10 },
-      { level: 'Nivel 3', actual: 0, recommended: 30 },
-      { level: 'Nivel 4', actual: 0, recommended: 60 },
-      { level: 'Nivel 5', actual: 0, recommended: 120 },
-    ],
-  };
+    const [summary, setSummary] = useState<StatisticsSummary>(DEFAULT_SUMMARY);
+    const [byLevel, setByLevel] = useState<StatisticsByLevelItem[]>(DEFAULT_BY_LEVEL);
+    const [topComplaints, setTopComplaints] = useState<TopComplaintItem[]>([]);
+    const [waitByLevel, setWaitByLevel] = useState<WaitByLevelItem[]>(DEFAULT_WAIT_BY_LEVEL);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      const loadStatistics = async () => {
+        setLoading(true);
+        const [summaryData, byLevelData, topComplaintsData, waitByLevelData] = await Promise.all([
+          statisticsApiService.getSummary(),
+          statisticsApiService.getByLevel(),
+          statisticsApiService.getTopComplaints(),
+          statisticsApiService.getWaitByLevel(),
+        ]);
+
+        setSummary(summaryData);
+        setByLevel(byLevelData);
+        setTopComplaints(topComplaintsData);
+        setWaitByLevel(waitByLevelData);
+        setLoading(false);
+      };
+
+      void loadStatistics();
+    }, []);
+
     const kpis = [
-        { label: 'Pacientes atendidos', value: 33, change: '+12%', up: true, icon: Users, accent: 'border-l-primary' },
-        { label: 'Pacientes críticos', value: 7, change: '+3%', up: true, icon: AlertTriangle, accent: 'border-l-mts-1' },
-        { label: 'Tiempo espera prom.', value: '48 min', change: '-8%', up: false, icon: Clock, accent: 'border-l-mts-3' },
-        { label: 'Resueltos hoy', value: 23, change: '+15%', up: true, icon: CheckCircle, accent: 'border-l-mts-4' },
+        { label: 'Pacientes atendidos', value: summary.totalActive, change: '', up: true, icon: Users, accent: 'border-l-primary' },
+        { label: 'Pacientes críticos', value: summary.criticalPatients, change: '', up: true, icon: AlertTriangle, accent: 'border-l-mts-1' },
+        { label: 'Tiempo espera prom.', value: `${Math.round(summary.averageWaitTime)} min`, change: '', up: false, icon: Clock, accent: 'border-l-mts-3' },
+        { label: 'Resueltos hoy', value: summary.attendedToday, change: '', up: true, icon: CheckCircle, accent: 'border-l-mts-4' },
     ];
     const barColors = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(48,96%,53%)', 'hsl(142,71%,45%)', 'hsl(217,91%,60%)'];
     return (<AppLayout>
@@ -56,6 +96,15 @@ export default function StatisticsPage() {
 
         
 
+        {loading && (<div className="flex items-center justify-center py-8">
+
+            <div className="h-8 w-8 rounded-full border-2 border-muted border-t-primary animate-spin" aria-label="Cargando estadísticas"/>
+
+          </div>)}
+
+
+        {!loading && (<>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
           {kpis.map(k => (<div key={k.label} className={cn("bg-card rounded-xl border border-border border-l-4 p-4", k.accent)}>
@@ -77,8 +126,6 @@ export default function StatisticsPage() {
                   <span className={cn("text-xs font-medium flex items-center gap-0.5 justify-end", k.up ? "text-mts-4" : "text-destructive")}>
 
                     {k.up ? <TrendingUp className="h-3 w-3"/> : <TrendingDown className="h-3 w-3"/>}
-
-                    {k.change}
 
                   </span>
 
@@ -104,7 +151,7 @@ export default function StatisticsPage() {
 
             <ResponsiveContainer width="100%" height={250}>
 
-              <BarChart data={mockStats.patientsByLevel}>
+              <BarChart data={byLevel}>
 
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(214,95%,93%)"/>
 
@@ -116,7 +163,7 @@ export default function StatisticsPage() {
 
                 <Bar dataKey="count" radius={[6, 6, 0, 0]}>
 
-                  {mockStats.patientsByLevel.map((_, i) => (<Cell key={i} fill={barColors[i]}/>))}
+                  {byLevel.map((_, i) => (<Cell key={i} fill={barColors[i]}/>))}
 
                 </Bar>
 
@@ -136,7 +183,7 @@ export default function StatisticsPage() {
 
             <ResponsiveContainer width="100%" height={250}>
 
-              <LineChart data={mockStats.volumeByHour}>
+              <LineChart data={[]}>
 
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(214,95%,93%)"/>
 
@@ -170,7 +217,7 @@ export default function StatisticsPage() {
 
             <div className="space-y-3">
 
-              {mockStats.topComplaints.map((c, i) => (<div key={c.complaint} className="flex items-center gap-3">
+              {topComplaints.map((c, i) => (<div key={c.complaint} className="flex items-center gap-3">
 
                   <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
 
@@ -220,7 +267,7 @@ export default function StatisticsPage() {
 
               </div>
 
-              {mockStats.waitTimeByLevel.map(w => {
+              {waitByLevel.map(w => {
             const exceeded = w.actual > w.recommended;
             return (<div key={w.level} className="grid grid-cols-4 text-sm py-2.5 border-b border-border/50">
 
@@ -244,6 +291,8 @@ export default function StatisticsPage() {
           </div>
 
         </div>
+
+        </>)}
 
       </div>
 

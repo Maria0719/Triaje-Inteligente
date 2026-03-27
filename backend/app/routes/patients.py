@@ -92,6 +92,17 @@ def create_patient(data: PatientCreateRequest, db: Session = Depends(get_db)):
     )
     vital_signs = vital_signs_repository.save(vital_signs)
 
+    if data.mtsLevel in (1, 2):
+        critical_alert = models.Alert(
+            patient_id=patient.id,
+            message=f"Paciente cr\u00edtico ingresado - Nivel {data.mtsLevel}",
+            type="critical_vitals",
+            severity=str(data.mtsLevel),
+            read=False,
+        )
+        db.add(critical_alert)
+        db.commit()
+
     return _to_patient_response(patient, vital_signs)
 
 
