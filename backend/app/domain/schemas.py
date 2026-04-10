@@ -101,6 +101,28 @@ class PatientStatusUpdate(BaseModel):
     status: Literal["waiting", "attended"]
 
 
+class KioskVitalSignsPayload(BaseModel):
+    heartRate: int
+    respiratoryRate: int
+    painScale: int = Field(ge=0, le=10)
+    consciousnessLevel: Literal["Alerta", "Voz", "Dolor", "No responde"]
+
+
+class KioskPatientCreateRequest(BaseModel):
+    firstName: str
+    lastName: str
+    documentNumber: str
+    eps: str
+    vitalSigns: KioskVitalSignsPayload
+    source: Literal["kiosk"]
+
+
+class KioskPatientCreateResponse(BaseModel):
+    patientId: UUID
+    estimatedWaitMinutes: int | None = None
+    mtsLevel: int
+
+
 class TriageHistoryItem(BaseModel):
     id: UUID
     patientId: UUID

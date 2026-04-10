@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Bell, Search, Users, AlertTriangle, Clock, CheckCircle, PlusCircle, Activity } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
@@ -6,31 +6,40 @@ import PatientCard from '@/components/PatientCard';
 import AppLayout from '@/components/AppLayout';
 import { cn } from '@/lib/utils';
 import { PatientApiService } from '@/infrastructure/api/PatientApiService';
+import { StatisticsApiService } from '@/infrastructure/api/StatisticsApiService';
 
 const patientApiService = new PatientApiService();
+const statisticsApiService = new StatisticsApiService();
 
 export default function DashboardPage() {
   const { patients, setPatients, alerts, markAlertAsRead, userName, loadPatients } = useApp();
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<'all' | 'critical' | 'urgent' | 'mild'>('all');
+    const [attendedToday, setAttendedToday] = useState(0);
+
+  const loadStatistics = useCallback(async () => {
+    const summary = await statisticsApiService.getSummary();
+    setAttendedToday(summary.attendedToday);
+  }, []);
 
   useEffect(() => {
     void loadPatients();
-  }, [loadPatients]);
+    void loadStatistics();
+  }, [loadPatients, loadStatistics]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       void loadPatients();
+      void loadStatistics();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [loadPatients]);
+  }, [loadPatients, loadStatistics]);
 
     const activePatients = patients.filter(p => p.status === 'waiting');
     const criticalCount = activePatients.filter(p => p.mtsLevel <= 2).length;
     const avgWait = Math.round(activePatients.reduce((s, p) => s + p.waitTimeMinutes, 0) / (activePatients.length || 1));
-    const attendedCount = patients.filter(p => p.status === 'attended').length;
     const unreadAlerts = alerts.filter(a => !a.read).length;
     let filtered = activePatients;
     if (filter === 'critical')
@@ -49,7 +58,7 @@ export default function DashboardPage() {
 
       void patientApiService
         .updatePatientStatus(id, 'attended')
-        .then(() => loadPatients())
+        .then(() => Promise.all([loadPatients(), loadStatistics()]))
         .catch((error) => {
           console.error('Failed to update patient status:', error);
         });
@@ -58,7 +67,7 @@ export default function DashboardPage() {
         { label: 'Pacientes activos', value: activePatients.length, icon: Users, accent: 'border-l-primary' },
         { label: 'Críticos (Nivel 1-2)', value: criticalCount, icon: AlertTriangle, accent: 'border-l-mts-1' },
         { label: 'Tiempo espera prom.', value: `${avgWait} min`, icon: Clock, accent: 'border-l-mts-3' },
-      { label: 'Atendidos hoy', value: attendedCount, icon: CheckCircle, accent: 'border-l-mts-4' },
+      { label: 'Atendidos hoy', value: attendedToday, icon: CheckCircle, accent: 'border-l-mts-4' },
     ];
     return (<AppLayout> 
 

@@ -15,6 +15,8 @@ from app.database.connection import get_db
 from app.database.repositories import PatientRepository, TriageResultRepository, VitalSignsRepository
 from app.domain.entities import VitalSigns
 from app.domain.schemas import (
+    KioskPatientCreateRequest,
+    KioskPatientCreateResponse,
     PatientCreateRequest,
     PatientResponse,
     PatientStatusUpdate,
@@ -125,6 +127,83 @@ def get_active_patients(db: Session = Depends(get_db)):
         _to_patient_response(patient, vital_signs_repository.get_latest_by_patient_id(patient.id))
         for patient in patients
     ]
+
+
+@router.post("/kiosk", response_model=KioskPatientCreateResponse, status_code=status.HTTP_201_CREATED)
+def create_patient_from_kiosk(data: KioskPatientCreateRequest, db: Session = Depends(get_db)):
+    patient_repository = PatientRepository(db)
+    vital_signs_repository = VitalSignsRepository(db)
+
+    domain_vitals = VitalSigns(
+        systolicBP=120,
+        diastolicBP=80,
+        heartRate=data.vitalSigns.heartRate,
+        respiratoryRate=data.vitalSigns.respiratoryRate,
+        temperature=36.6,
+        oxygenSaturation=98,
+        consciousnessLevel=data.vitalSigns.consciousnessLevel,
+    )
+    triage_result = classify_use_case.execute(
+        symptoms=[],
+        vital_signs=domain_vitals,
+        pain_scale=data.vitalSigns.painScale,
+        medical_history=[],
+    )
+
+    patient = models.Patient(
+        first_name=data.firstName,
+        last_name=data.lastName,
+        document_type="CC",
+        document_number=data.documentNumber,
+        date_of_birth=datetime(2000, 1, 1).date(),
+        age=0,
+        sex="Otro",
+        chief_complaint="Registro por kiosco",
+        symptoms=[],
+        medical_history=[],
+        pain_scale=data.vitalSigns.painScale,
+        mts_level=triage_result.level,
+        status="waiting",
+        updated_at=datetime.utcnow(),
+    )
+    patient = patient_repository.save(patient)
+
+    vital_signs_repository.save(
+        models.VitalSigns(
+            patient_id=patient.id,
+            systolic_bp=120,
+            diastolic_bp=80,
+            heart_rate=data.vitalSigns.heartRate,
+            respiratory_rate=data.vitalSigns.respiratoryRate,
+            temperature=36.6,
+            oxygen_saturation=98,
+            consciousness_level=data.vitalSigns.consciousnessLevel,
+        )
+    )
+
+    if triage_result.level in (1, 2):
+        critical_alert = models.Alert(
+            patient_id=patient.id,
+            message=f"Paciente cr\u00edtico ingresado por kiosco - Nivel {triage_result.level}",
+            type="critical_vitals",
+            severity=str(triage_result.level),
+            read=False,
+        )
+        db.add(critical_alert)
+        db.commit()
+
+    waiting_ahead = (
+        db.query(models.Patient)
+        .filter(models.Patient.status == "waiting", models.Patient.mts_level <= triage_result.level)
+        .count()
+    )
+    estimated_wait_minutes = max(0, (waiting_ahead - 1) * 7)
+
+    return KioskPatientCreateResponse(
+        patientId=patient.id,
+        estimatedWaitMinutes=estimated_wait_minutes,
+        mtsLevel=triage_result.level,
+    )
 
 
 @router.get("/{id}", response_model=PatientResponse)

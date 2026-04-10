@@ -34,7 +34,10 @@ def get_statistics_summary(db: Session = Depends(get_db)):
     today_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     attended_today = (
         db.query(Patient)
-        .filter(Patient.status == "attended", Patient.updated_at >= today_midnight)
+        .filter(
+            Patient.status == "attended",
+            func.date(Patient.updated_at) == func.date("now"),
+        )
         .count()
     )
 
