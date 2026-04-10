@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -31,6 +32,7 @@ class PatientRepository:
             return None
 
         patient.status = status
+        patient.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(patient)
         return patient
@@ -45,14 +47,6 @@ class VitalSignsRepository:
         self.db.commit()
         self.db.refresh(vital_signs)
         return vital_signs
-
-    def get_by_patient_id(self, patient_id: uuid.UUID) -> list[models.VitalSigns]:
-        return (
-            self.db.query(models.VitalSigns)
-            .filter(models.VitalSigns.patient_id == patient_id)
-            .order_by(models.VitalSigns.recorded_at.desc())
-            .all()
-        )
 
     def get_latest_by_patient_id(self, patient_id: uuid.UUID) -> models.VitalSigns | None:
         return (
@@ -102,6 +96,19 @@ class AlertRepository:
             .order_by(models.Alert.created_at.desc())
             .all()
         )
+
+    def get_by_id(self, alert_id: uuid.UUID) -> models.Alert | None:
+        return self.db.query(models.Alert).filter(models.Alert.id == alert_id).first()
+
+    def mark_as_read(self, alert_id: uuid.UUID) -> models.Alert | None:
+        alert = self.get_by_id(alert_id)
+        if alert is None:
+            return None
+
+        alert.read = True
+        self.db.commit()
+        self.db.refresh(alert)
+        return alert
 
 
 class TriageResultRepository:

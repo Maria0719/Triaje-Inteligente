@@ -1,20 +1,10 @@
 ﻿import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Patient, Alert } from '@/types';
+import { AlertApiService, BackendAlert } from '@/infrastructure/api/AlertApiService';
 import { PatientApiService } from '@/infrastructure/api/PatientApiService';
 
 const patientApiService = new PatientApiService();
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-
-type BackendAlert = {
-    id: string;
-    patient_id: string;
-    patient_name?: string;
-    message: string;
-    type: Alert['type'];
-    severity: string | number;
-    read: boolean;
-    created_at: string;
-};
+const alertApiService = new AlertApiService();
 
 const toTimeAgo = (createdAt: string): string => {
     const createdMs = new Date(createdAt).getTime();
@@ -47,6 +37,7 @@ export interface AppContextType {
     alerts: Alert[];
     setAlerts: React.Dispatch<React.SetStateAction<Alert[]>>;
     loadAlerts: () => Promise<void>;
+    markAlertAsRead: (alertId: string) => Promise<void>;
     isLoggedIn: boolean;
     setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
     userName: string;
@@ -64,37 +55,45 @@ export function AppProvider({ children }: {
     const [userName, setUserName] = useState('');
     const [userRole, setUserRole] = useState('');
 
+    const mapBackendAlert = (item: BackendAlert): Alert => {
+        const createdAt = item.createdAt ?? item.created_at ?? new Date().toISOString();
+        const patientId = item.patientId ?? item.patient_id ?? '';
+        const patientName = item.patientName ?? item.patient_name ?? 'Paciente';
+        const parsedSeverity = Number(item.severity);
+        const severity = ([1, 2, 3, 4, 5] as const).includes(parsedSeverity as 1 | 2 | 3 | 4 | 5)
+            ? (parsedSeverity as 1 | 2 | 3 | 4 | 5)
+            : 3;
+
+        return {
+            id: item.id,
+            patientId,
+            patientName,
+            message: item.message,
+            type: item.type,
+            severity,
+            timeAgo: toTimeAgo(createdAt),
+            read: item.read,
+        };
+    };
+
     const loadAlerts = useCallback(async () => {
         try {
-            const response = await fetch(`${API_URL}/api/alerts/unread`);
-            if (!response.ok) {
-                throw new Error('Failed to load alerts');
-            }
-
-            const data = (await response.json()) as BackendAlert[];
-            const mapped: Alert[] = data.map(item => {
-                const parsedSeverity = Number(item.severity);
-                const severity = ([1, 2, 3, 4, 5] as const).includes(parsedSeverity as 1 | 2 | 3 | 4 | 5)
-                    ? (parsedSeverity as 1 | 2 | 3 | 4 | 5)
-                    : 3;
-
-                return {
-                    id: item.id,
-                    patientId: item.patient_id,
-                    patientName: item.patient_name ?? 'Paciente',
-                    message: item.message,
-                    type: item.type,
-                    severity,
-                    timeAgo: toTimeAgo(item.created_at),
-                    read: item.read,
-                };
-            });
-
-            setAlerts(mapped);
+            const data = await alertApiService.getUnreadAlerts();
+            setAlerts(data.map(mapBackendAlert));
         }
         catch (error) {
             console.error('AppContext.loadAlerts error:', error);
             setAlerts([]);
+        }
+    }, []);
+
+    const markAlertAsRead = useCallback(async (alertId: string) => {
+        try {
+            await alertApiService.markAsRead(alertId);
+            setAlerts(prev => prev.map(alert => alert.id === alertId ? { ...alert, read: true } : alert));
+        }
+        catch (error) {
+            console.error('AppContext.markAlertAsRead error:', error);
         }
     }, []);
 
@@ -115,7 +114,7 @@ export function AppProvider({ children }: {
         }
     }, [isLoggedIn, loadPatients, loadAlerts]);
 
-    return (<AppContext.Provider value={{ patients, setPatients, loadPatients, alerts, setAlerts, loadAlerts, isLoggedIn, setIsLoggedIn, userName, setUserName, userRole, setUserRole }}> 
+    return (<AppContext.Provider value={{ patients, setPatients, loadPatients, alerts, setAlerts, loadAlerts, markAlertAsRead, isLoggedIn, setIsLoggedIn, userName, setUserName, userRole, setUserRole }}> 
 
       {children} 
 

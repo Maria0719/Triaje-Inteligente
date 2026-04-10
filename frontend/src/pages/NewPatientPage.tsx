@@ -9,6 +9,7 @@ import { PatientApiService } from '@/infrastructure/api/PatientApiService';
 import { ClassifyPatientUseCase } from '@/application/use-cases/ClassifyPatient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useApp } from '@/context/AppContext';
 const triageService = new TriageApiService();
 const classifyUseCase = new ClassifyPatientUseCase(triageService);
 const patientApiService = new PatientApiService();
@@ -19,13 +20,16 @@ const painEmojis = ['😊', '🙂', '😐', '😕', '😟', '😣', '😖', '�
 type NewPatientLocationState = {
     patient?: Patient;
     isUpdate?: boolean;
+  returnTo?: string;
 };
 export default function NewPatientPage() {
     const navigate = useNavigate();
+  const { loadPatients } = useApp();
     const location = useLocation();
     const incomingState = location.state as NewPatientLocationState | null;
     const incomingPatient = incomingState?.patient;
     const isUpdate = incomingState?.isUpdate ?? false;
+    const returnTo = incomingState?.returnTo;
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [firstName, setFirstName] = useState('');
@@ -92,6 +96,14 @@ export default function NewPatientPage() {
           oxygenSaturation: Number(spo2) || 98,
           consciousnessLevel: avpu,
         };
+
+        if (isUpdate && incomingPatient?.id) {
+          await patientApiService.updatePatientVitals(incomingPatient.id, vitals);
+          await loadPatients();
+          navigate(returnTo ?? `/patients/${incomingPatient.id}`);
+          return;
+        }
+
         const age = Number(calcAge(dob) || 0);
         const result = await classifyUseCase.execute(symptoms, vitals, painScale, history);
 

@@ -1,11 +1,12 @@
 import AppLayout from '@/components/AppLayout';
 import { Users, AlertTriangle, Clock, CheckCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell, } from 'recharts';
 import {
   StatisticsApiService,
   StatisticsByLevelItem,
+  StatisticsPeriod,
   StatisticsSummary,
   TopComplaintItem,
   WaitByLevelItem,
@@ -37,33 +38,48 @@ const DEFAULT_WAIT_BY_LEVEL: WaitByLevelItem[] = [
   { level: 'Nivel 5', actual: 0, recommended: 120 },
 ];
 
+const PERIOD_TO_API: Record<(typeof periods)[number], StatisticsPeriod> = {
+  'Hoy': 'today',
+  'Esta semana': 'week',
+  'Este mes': 'month',
+};
+
 export default function StatisticsPage() {
-    const [period, setPeriod] = useState<string>('Hoy');
+    const [period, setPeriod] = useState<(typeof periods)[number]>('Hoy');
     const [summary, setSummary] = useState<StatisticsSummary>(DEFAULT_SUMMARY);
     const [byLevel, setByLevel] = useState<StatisticsByLevelItem[]>(DEFAULT_BY_LEVEL);
     const [topComplaints, setTopComplaints] = useState<TopComplaintItem[]>([]);
     const [waitByLevel, setWaitByLevel] = useState<WaitByLevelItem[]>(DEFAULT_WAIT_BY_LEVEL);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-      const loadStatistics = async () => {
-        setLoading(true);
-        const [summaryData, byLevelData, topComplaintsData, waitByLevelData] = await Promise.all([
-          statisticsApiService.getSummary(),
-          statisticsApiService.getByLevel(),
-          statisticsApiService.getTopComplaints(),
-          statisticsApiService.getWaitByLevel(),
-        ]);
+    const fetchStats = useCallback(async (selectedPeriod: (typeof periods)[number]) => {
+      const apiPeriod = PERIOD_TO_API[selectedPeriod];
+      setLoading(true);
+      const [summaryData, byLevelData, topComplaintsData, waitByLevelData] = await Promise.all([
+        statisticsApiService.getSummary(apiPeriod),
+        statisticsApiService.getByLevel(apiPeriod),
+        statisticsApiService.getTopComplaints(apiPeriod),
+        statisticsApiService.getWaitByLevel(apiPeriod),
+      ]);
 
-        setSummary(summaryData);
-        setByLevel(byLevelData);
-        setTopComplaints(topComplaintsData);
-        setWaitByLevel(waitByLevelData);
-        setLoading(false);
-      };
-
-      void loadStatistics();
+      setSummary(summaryData);
+      setByLevel(byLevelData);
+      setTopComplaints(topComplaintsData);
+      setWaitByLevel(waitByLevelData);
+      setLoading(false);
     }, []);
+
+    useEffect(() => {
+      void fetchStats(period);
+    }, [fetchStats, period]);
+
+    useEffect(() => {
+      const interval = setInterval(() => {
+        void fetchStats(period);
+      }, 30000);
+
+      return () => clearInterval(interval);
+    }, [fetchStats, period]);
 
     const kpis = [
         { label: 'Pacientes atendidos', value: summary.totalActive, change: '', up: true, icon: Users, accent: 'border-l-primary' },

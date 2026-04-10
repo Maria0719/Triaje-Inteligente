@@ -36,7 +36,7 @@ type TriageResultLocationState = {
 export default function TriageResultPage() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { setPatients } = useApp();
+  const { loadPatients } = useApp();
     const state = location.state as TriageResultLocationState | null;
     if (!state) {
         navigate('/patients/new');
@@ -44,49 +44,8 @@ export default function TriageResultPage() {
     }
     const { level, factors, patient } = state;
     const config = MTS_CONFIG[level];
-    const handleAddToQueue = () => {
-        if (state.isUpdate && patient.id) {
-            setPatients(prev => prev.map(p => p.id === patient.id
-                ? {
-                    ...p,
-                    firstName: patient.firstName,
-                    lastName: patient.lastName,
-                    documentType: patient.docType,
-                    documentNumber: patient.docNumber,
-                    dateOfBirth: patient.dob,
-                    age: typeof patient.age === 'number' ? patient.age : 0,
-                    sex: patient.sex,
-                    chiefComplaint: patient.complaint || 'No especificado',
-                    symptoms: patient.symptoms,
-                    medicalHistory: patient.history,
-                    painScale: patient.painScale,
-                    vitalSigns: patient.vitals,
-                    mtsLevel: level,
-                }
-                : p));
-            navigate('/dashboard');
-            return;
-        }
-        const newPatient: Patient = {
-            id: `P${Date.now()}`,
-            firstName: patient.firstName,
-            lastName: patient.lastName,
-            documentType: patient.docType,
-            documentNumber: patient.docNumber,
-            dateOfBirth: patient.dob,
-            age: typeof patient.age === 'number' ? patient.age : 0,
-            sex: patient.sex,
-            chiefComplaint: patient.complaint || 'No especificado',
-            symptoms: patient.symptoms,
-            medicalHistory: patient.history,
-            painScale: patient.painScale,
-            vitalSigns: patient.vitals,
-            mtsLevel: level,
-            arrivalTime: new Date(),
-            waitTimeMinutes: 0,
-            status: 'waiting',
-        };
-        setPatients(prev => [...prev, newPatient]);
+    const handleAddToQueue = async () => {
+      await loadPatients();
         navigate('/dashboard');
     };
     return (<AppLayout>

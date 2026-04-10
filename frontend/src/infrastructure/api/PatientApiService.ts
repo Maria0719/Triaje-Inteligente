@@ -53,6 +53,8 @@ type PatientCreateInput = {
     vitalSigns: BackendVitalSigns;
 };
 
+type PatientVitalsUpdateInput = BackendVitalSigns;
+
 const waitMinutesFromCreatedAt = (createdAt: string): number => {
     const created = new Date(createdAt).getTime();
     if (Number.isNaN(created)) {
@@ -173,6 +175,27 @@ export class PatientApiService {
         }
         catch (error) {
             console.error('PatientApiService.getPatientById error:', error);
+            throw error;
+        }
+    }
+
+    async updatePatientVitals(id: string, vitalSigns: PatientVitalsUpdateInput): Promise<Patient> {
+        try {
+            const response = await fetch(`${API_URL}/api/patients/${id}/vitals`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(vitalSigns),
+            });
+
+            if (!response.ok) {
+                throw await buildError(response, 'Failed to update patient vital signs');
+            }
+
+            const updated = (await response.json()) as BackendPatient;
+            return toPatient(updated);
+        }
+        catch (error) {
+            console.error('PatientApiService.updatePatientVitals error:', error);
             throw error;
         }
     }

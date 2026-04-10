@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from app.routes.triage import router as triage_router
 from app.routes.patients import router as patients_router
@@ -21,6 +22,22 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_patient_updated_at_column() -> None:
+    """Best-effort migration for existing SQLite databases."""
+    with engine.begin() as connection:
+        columns = connection.execute(text("PRAGMA table_info(patients)")).fetchall()
+        column_names = {row[1] for row in columns}
+        if "updated_at" not in column_names:
+            connection.execute(text("ALTER TABLE patients ADD COLUMN updated_at DATETIME"))
+
+        connection.execute(
+            text("UPDATE patients SET updated_at = created_at WHERE updated_at IS NULL")
+        )
+
+
+ensure_patient_updated_at_column()
 
 
 def create_default_user():

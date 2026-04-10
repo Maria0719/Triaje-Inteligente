@@ -39,6 +39,7 @@ class VitalSigns(BaseModel):
 
 
 class TriageRequest(BaseModel):
+    patientId: UUID | None = None
     symptoms: list[str]
     vitalSigns: VitalSigns
     painScale: int
@@ -98,3 +99,23 @@ class PatientResponse(BaseModel):
 
 class PatientStatusUpdate(BaseModel):
     status: Literal["waiting", "attended"]
+
+
+class TriageHistoryItem(BaseModel):
+    id: UUID
+    patientId: UUID
+    level: int
+    factors: list[str]
+    confidence: float
+    createdAt: datetime
+
+
+class AlertResponse(BaseModel):
+    id: UUID
+    patientId: UUID
+    patientName: str | None = None
+    message: str
+    type: str
+    severity: str
+    read: bool
+    createdAt: datetime

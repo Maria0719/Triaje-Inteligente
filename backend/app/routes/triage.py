@@ -2,8 +2,12 @@
 FastAPI router that exposes the triage classification endpoint.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
+from app.database import models
+from app.database.connection import get_db
+from app.database.repositories import PatientRepository, TriageResultRepository
 from app.domain.entities import VitalSigns
 from app.domain.schemas import TriageRequest, TriageResponse
 from app.services.classifier import TriageClassifier
@@ -17,7 +21,7 @@ classify_use_case = ClassifyPatientUseCase(triage_service)
 
 
 @router.post("/classify", response_model=TriageResponse)
-def classify_patient(data: TriageRequest):
+def classify_patient(data: TriageRequest, db: Session = Depends(get_db)):
     try:
         vital_signs = VitalSigns(
             systolicBP=data.vitalSigns.systolicBP,
@@ -34,6 +38,26 @@ def classify_patient(data: TriageRequest):
             pain_scale=data.painScale,
             medical_history=data.medicalHistory,
         )
+
+        if data.patientId is not None:
+            patient_repository = PatientRepository(db)
+            triage_result_repository = TriageResultRepository(db)
+
+            patient = patient_repository.get_by_id(data.patientId)
+            if patient is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+
+            triage_result_repository.save(
+                models.TriageResult(
+                    patient_id=data.patientId,
+                    level=result.level,
+                    factors=result.factors,
+                    confidence=result.confidence,
+                )
+            )
+
         return TriageResponse(level=result.level, factors=result.factors, confidence=result.confidence)
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=str(e))

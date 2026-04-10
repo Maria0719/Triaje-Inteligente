@@ -10,13 +10,21 @@ import { PatientApiService } from '@/infrastructure/api/PatientApiService';
 const patientApiService = new PatientApiService();
 
 export default function DashboardPage() {
-  const { patients, setPatients, alerts, setAlerts, userName, loadPatients } = useApp();
+  const { patients, setPatients, alerts, markAlertAsRead, userName, loadPatients } = useApp();
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<'all' | 'critical' | 'urgent' | 'mild'>('all');
 
   useEffect(() => {
     void loadPatients();
+  }, [loadPatients]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadPatients();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [loadPatients]);
 
     const activePatients = patients.filter(p => p.status === 'waiting');
@@ -50,7 +58,7 @@ export default function DashboardPage() {
         { label: 'Pacientes activos', value: activePatients.length, icon: Users, accent: 'border-l-primary' },
         { label: 'Críticos (Nivel 1-2)', value: criticalCount, icon: AlertTriangle, accent: 'border-l-mts-1' },
         { label: 'Tiempo espera prom.', value: `${avgWait} min`, icon: Clock, accent: 'border-l-mts-3' },
-        { label: 'Atendidos hoy', value: attendedCount + 23, icon: CheckCircle, accent: 'border-l-mts-4' },
+      { label: 'Atendidos hoy', value: attendedCount, icon: CheckCircle, accent: 'border-l-mts-4' },
     ];
     return (<AppLayout> 
 
@@ -225,7 +233,7 @@ export default function DashboardPage() {
 
                       <span className="text-xs text-muted-foreground">{alert.timeAgo}</span> 
 
-                      <button onClick={() => setAlerts(prev => prev.map(a => a.id === alert.id ? { ...a, read: true } : a))} className="text-xs text-primary hover:underline">
+                      <button onClick={() => { void markAlertAsRead(alert.id); }} className="text-xs text-primary hover:underline">
 
                         Marcar como vista 
 

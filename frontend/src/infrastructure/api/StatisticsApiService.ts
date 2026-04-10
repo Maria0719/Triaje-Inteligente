@@ -27,6 +27,8 @@ export type WaitByLevelItem = {
     recommended: number;
 };
 
+export type StatisticsPeriod = 'today' | 'week' | 'month';
+
 const DEFAULT_SUMMARY: StatisticsSummary = {
     totalActive: 0,
     criticalPatients: 0,
@@ -54,9 +56,9 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null;
 
 export class StatisticsApiService {
-    async getSummary(): Promise<StatisticsSummary> {
+    async getSummary(period: StatisticsPeriod = 'today'): Promise<StatisticsSummary> {
         try {
-            const response = await fetch(`${API_URL}/api/statistics/summary`);
+            const response = await fetch(`${API_URL}/api/statistics/summary?period=${period}`);
             if (!response.ok) {
                 throw new Error('Failed to load statistics summary');
             }
@@ -79,9 +81,9 @@ export class StatisticsApiService {
         }
     }
 
-    async getByLevel(): Promise<StatisticsByLevelItem[]> {
+    async getByLevel(period: StatisticsPeriod = 'today'): Promise<StatisticsByLevelItem[]> {
         try {
-            const response = await fetch(`${API_URL}/api/statistics/by-level`);
+            const response = await fetch(`${API_URL}/api/statistics/by-level?period=${period}`);
             if (!response.ok) {
                 throw new Error('Failed to load statistics by level');
             }
@@ -107,9 +109,9 @@ export class StatisticsApiService {
         }
     }
 
-    async getTopComplaints(): Promise<TopComplaintItem[]> {
+    async getTopComplaints(period: StatisticsPeriod = 'today'): Promise<TopComplaintItem[]> {
         try {
-            const response = await fetch(`${API_URL}/api/statistics/top-complaints`);
+            const response = await fetch(`${API_URL}/api/statistics/top-complaints?period=${period}`);
             if (!response.ok) {
                 throw new Error('Failed to load top complaints');
             }
@@ -134,9 +136,9 @@ export class StatisticsApiService {
         }
     }
 
-    async getWaitByLevel(): Promise<WaitByLevelItem[]> {
+    async getWaitByLevel(period: StatisticsPeriod = 'today'): Promise<WaitByLevelItem[]> {
         try {
-            const response = await fetch(`${API_URL}/api/statistics/wait-by-level`);
+            const response = await fetch(`${API_URL}/api/statistics/wait-by-level?period=${period}`);
             if (!response.ok) {
                 throw new Error('Failed to load wait time by level');
             }
