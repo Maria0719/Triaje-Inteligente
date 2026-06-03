@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Loader2, HeartPulse, Activity, Frown, Eye } from 'lucide-react';
+import { IVitalSignsDetector, VitalSignsMeasurement } from '@/domain/ports/IVitalSignsDetector';
+import { SimulatedVitalSignsDetector } from '@/domain/services/SimulatedVitalSignsDetector';
+import { useFaceCapture } from '@/infrastructure/vision/useFaceCapture';
+import type { FaceCaptureQuality } from '@/infrastructure/vision/RoiSignalTypes';
 
 type MeasurementKey = 'heartRate' | 'respiratoryRate' | 'painScale' | 'consciousnessLevel';
-type AVPU = 'Alerta' | 'Voz' | 'Dolor' | 'No responde';
 
 type MeasurementState = {
   loading: boolean;
@@ -57,6 +60,9 @@ export default function PatientKioskPage() {
   const [error, setError] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const detectedValuesRef = useRef<VitalSignsMeasurement | null>(null);
+
+  const { quality } = useFaceCapture(videoRef, step === 'camera');
 
   const nameParts = useMemo(() => fullName.trim().split(/\s+/).filter(Boolean), [fullName]);
 
@@ -88,7 +94,12 @@ export default function PatientKioskPage() {
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
+          video: {
+            facingMode: 'user',
+            width:     { ideal: 640 },
+            height:    { ideal: 480 },
+            frameRate: { ideal: 30, max: 30 },
+          },
           audio: false,
         });
         if (cancelled) {
@@ -102,7 +113,17 @@ export default function PatientKioskPage() {
         }
       } catch (cameraError) {
         console.error('Unable to start kiosk camera:', cameraError);
-        setError('No se pudo acceder a la camara. Continuaremos con el modo demo.');
+        let msg = 'No se pudo acceder a la cámara. Continuando en modo demo.';
+        if (cameraError instanceof Error) {
+          if (cameraError.name === 'NotAllowedError' || cameraError.name === 'PermissionDeniedError') {
+            msg = 'Permiso de cámara denegado. Habilítalo en la configuración del navegador.';
+          } else if (cameraError.name === 'NotFoundError' || cameraError.name === 'DevicesNotFoundError') {
+            msg = 'No se encontró ninguna cámara. Continuando en modo demo.';
+          } else if (cameraError.name === 'NotReadableError' || cameraError.name === 'TrackStartError') {
+            msg = 'La cámara está en uso por otra aplicación. Continuando en modo demo.';
+          }
+        }
+        setError(msg);
       }
     };
 
@@ -119,42 +140,32 @@ export default function PatientKioskPage() {
       return;
     }
 
-    const keys: MeasurementKey[] = ['heartRate', 'respiratoryRate', 'painScale', 'consciousnessLevel'];
-    const timers: number[] = [];
+    let cancelled = false;
+    const detector: IVitalSignsDetector = new SimulatedVitalSignsDetector();
 
-    keys.forEach(key => {
-      let ticks = 0;
-      const interval = window.setInterval(() => {
-        ticks += 1;
-        const progress = Math.min(100, Math.round((ticks / 50) * 100));
-        setMeasurements(prev => ({
-          ...prev,
-          [key]: { ...prev[key], progress },
-        }));
-      }, 200);
-      timers.push(interval);
-
-      const timeout = window.setTimeout(() => {
-        window.clearInterval(interval);
-        const generatedValue =
-          key === 'heartRate'
-            ? `${Math.floor(65 + Math.random() * 46)} bpm`
-            : key === 'respiratoryRate'
-              ? `${Math.floor(14 + Math.random() * 9)} rpm`
-              : key === 'painScale'
-                ? `${Math.floor(1 + Math.random() * 7)} / 10`
-                : 'Alerta';
-
-        setMeasurements(prev => ({
-          ...prev,
-          [key]: { loading: false, progress: 100, value: generatedValue },
-        }));
-      }, 10000);
-      timers.push(timeout);
+    detector.measure(progress => {
+      if (cancelled) return;
+      setMeasurements(prev => {
+        const next = { ...prev };
+        (Object.keys(next) as MeasurementKey[]).forEach(key => {
+          next[key] = { ...next[key], progress };
+        });
+        return next;
+      });
+    }).then(result => {
+      if (cancelled) return;
+      detectedValuesRef.current = result;
+      setMeasurements({
+        heartRate:          { loading: false, progress: 100, value: `${result.heartRate.value} bpm` },
+        respiratoryRate:    { loading: false, progress: 100, value: `${result.respiratoryRate.value} rpm` },
+        painScale:          { loading: false, progress: 100, value: `${result.painScale.value} / 10` },
+        consciousnessLevel: { loading: false, progress: 100, value: result.consciousnessLevel.value },
+      });
     });
 
     return () => {
-      timers.forEach(timer => window.clearTimeout(timer));
+      cancelled = true;
+      detector.cancel();
     };
   }, [step]);
 
@@ -171,10 +182,13 @@ export default function PatientKioskPage() {
       return;
     }
 
-    const heartRate = Number(measurements.heartRate.value.replace(' bpm', ''));
-    const respiratoryRate = Number(measurements.respiratoryRate.value.replace(' rpm', ''));
-    const painScale = Number(measurements.painScale.value.split(' / ')[0]);
-    const consciousnessLevel = 'Alerta' as AVPU;
+    const detected = detectedValuesRef.current;
+    if (!detected) return;
+
+    const heartRate = detected.heartRate.value;
+    const respiratoryRate = detected.respiratoryRate.value;
+    const painScale = detected.painScale.value;
+    const consciousnessLevel = detected.consciousnessLevel.value;
 
     const payload = {
       firstName: nameParts[0] ?? 'Paciente',
@@ -309,12 +323,17 @@ export default function PatientKioskPage() {
               <p className="text-base md:text-lg text-slate-600 mt-1">Estamos tomando tus signos vitales.</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-video flex items-center justify-center">
+            <div className="relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-video flex items-center justify-center">
               <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
               {!streamRef.current && (
                 <div className="absolute flex flex-col items-center text-slate-600">
                   <Camera className="h-10 w-10 mb-2" />
                   <span>Modo demo</span>
+                </div>
+              )}
+              {quality.status !== 'idle' && quality.message && (
+                <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm font-semibold text-white whitespace-nowrap ${qualityBadgeClass(quality)}`}>
+                  {quality.message}
                 </div>
               )}
             </div>
@@ -365,6 +384,12 @@ export default function PatientKioskPage() {
       </div>
     </main>
   );
+}
+
+function qualityBadgeClass(q: FaceCaptureQuality): string {
+  if (q.status === 'loading' || q.status === 'error') return 'bg-slate-600/80';
+  if (!q.faceDetected || !q.faceCentered || !q.lightAdequate || !q.motionStable) return 'bg-amber-500/90';
+  return 'bg-green-600/90';
 }
 
 function MeasurementCard({ title, icon, state }: { title: string; icon: React.ReactNode; state: MeasurementState }) {
