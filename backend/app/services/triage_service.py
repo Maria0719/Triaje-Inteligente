@@ -3,7 +3,7 @@ Domain service and triage use case definitions.
 """
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 
 from app.domain.entities import VitalSigns, TriageResult
 
@@ -16,6 +16,7 @@ class ITriageClassifier(ABC):
         vital_signs: VitalSigns,
         pain_scale: int,
         medical_history: List[str],
+        hrv_rmssd: Optional[float] = None,
     ) -> TriageResult:
         pass
 
@@ -30,12 +31,14 @@ class TriageService:
         vital_signs: VitalSigns,
         pain_scale: int,
         medical_history: List[str],
+        hrv_rmssd: Optional[float] = None,
     ) -> TriageResult:
         return self._classifier.classify(
             symptoms=symptoms,
             vital_signs=vital_signs,
             pain_scale=pain_scale,
             medical_history=medical_history,
+            hrv_rmssd=hrv_rmssd,
         )
 
 
@@ -49,10 +52,12 @@ class ClassifyPatientUseCase:
         vital_signs: VitalSigns,
         pain_scale: int,
         medical_history: List[str],
+        hrv_rmssd: Optional[float] = None,
     ) -> TriageResult:
         return self._triage_service.classify_patient(
             symptoms=symptoms,
             vital_signs=vital_signs,
             pain_scale=pain_scale,
             medical_history=medical_history,
+            hrv_rmssd=hrv_rmssd,
         )

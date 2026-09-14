@@ -18,4 +18,10 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // @mediapipe/tasks-vision ships as a pre-bundled ESM file that loads WASM at
+  // runtime via fetch. Excluding it from Vite's optimizer avoids issues with
+  // top-level await and dynamic imports inside the bundle.
+  optimizeDeps: {
+    exclude: ["@mediapipe/tasks-vision"],
+  },
 }));

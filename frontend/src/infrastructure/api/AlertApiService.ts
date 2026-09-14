@@ -1,6 +1,19 @@
 /**
  * Service that calls the backend API for alert operations.
+ *
+ * Capa: Infraestructura (api)
+ *
+ * Métodos disponibles:
+ *   - getUnreadAlerts()         → GET /api/alerts  (todas las alertas sin leer)
+ *   - getAlertsByPatient(id)    → GET /api/alerts/patient/{id}  (todas: leídas + sin leer)
+ *   - markAsRead(id)            → PATCH /api/alerts/{id}/read
+ *
+ * Relación con el sistema:
+ *   - AppContext.loadAlerts() usa getUnreadAlerts() para el panel lateral.
+ *   - PatientDetailPage usa getAlertsByPatient() para "Notas del sistema".
  */
+
+import type { Alert } from '@/domain/entities/Patient';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -11,7 +24,8 @@ export type BackendAlert = {
     patientName?: string;
     patient_name?: string;
     message: string;
-    type: 'wait_exceeded' | 'risk_escalated' | 'critical_vitals';
+    /** Incluye tipos de Fase 4: 'anomalous_vitals' | 'low_confidence'. */
+    type: Alert['type'];
     severity: string | number;
     read: boolean;
     createdAt?: string;
@@ -34,6 +48,19 @@ export class AlertApiService {
         const response = await fetch(`${API_URL}/api/alerts`);
         if (!response.ok) {
             throw await buildError(response, 'Failed to load alerts');
+        }
+
+        return (await response.json()) as BackendAlert[];
+    }
+
+    /**
+     * Devuelve TODAS las alertas de un paciente (leídas y sin leer), ordenadas
+     * por fecha descendente. Usado por "Notas del sistema" en PatientDetailPage.
+     */
+    async getAlertsByPatient(patientId: string): Promise<BackendAlert[]> {
+        const response = await fetch(`${API_URL}/api/alerts/patient/${patientId}`);
+        if (!response.ok) {
+            throw await buildError(response, 'Failed to load patient alerts');
         }
 
         return (await response.json()) as BackendAlert[];

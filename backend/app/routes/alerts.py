@@ -50,6 +50,22 @@ def get_unread_alerts(db: Session = Depends(get_db)):
     return get_alerts(db)
 
 
+@router.get("/patient/{patient_id}", response_model=list[AlertResponse])
+def get_alerts_by_patient(patient_id: UUID, db: Session = Depends(get_db)):
+    """Return all alerts for a specific patient (read and unread), newest first.
+
+    Used by PatientDetailPage "Notas del sistema" to show the full history
+    of system-generated alerts regardless of read status.
+    """
+    alert_repository = AlertRepository(db)
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if patient is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+
+    alerts = alert_repository.get_by_patient_id(patient_id)
+    return [_serialize_alert(alert, patient) for alert in alerts]
+
+
 @router.patch("/{alert_id}/read", response_model=AlertResponse)
 def mark_alert_as_read(alert_id: UUID, db: Session = Depends(get_db)):
     alert_repository = AlertRepository(db)

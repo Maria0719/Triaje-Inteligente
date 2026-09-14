@@ -60,6 +60,13 @@ class VitalSignsPayload(BaseModel):
     temperature: float
     oxygenSaturation: float
     consciousnessLevel: Literal["Alerta", "Voz", "Dolor", "No responde"]
+    # Campos rPPG opcionales — solo presentes en pacientes del kiosco con cámara
+    hrv: float | None = None
+    spo2: float | None = None
+    heartRateConfidence: float | None = None
+    respiratoryRateConfidence: float | None = None
+    hrvConfidence: float | None = None
+    spo2Confidence: float | None = None
 
 
 class PatientCreateRequest(BaseModel):
@@ -106,6 +113,13 @@ class KioskVitalSignsPayload(BaseModel):
     respiratoryRate: int
     painScale: int = Field(ge=0, le=10)
     consciousnessLevel: Literal["Alerta", "Voz", "Dolor", "No responde"]
+    # Campos rPPG opcionales — enviados cuando la Fase 2 esté activa
+    hrv: float | None = None
+    spo2: float | None = None
+    heartRateConfidence: float | None = None
+    respiratoryRateConfidence: float | None = None
+    hrvConfidence: float | None = None
+    spo2Confidence: float | None = None
 
 
 class KioskPatientCreateRequest(BaseModel):

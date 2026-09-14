@@ -9,6 +9,14 @@ export interface VitalSigns {
     temperature: number;
     oxygenSaturation: number;
     consciousnessLevel: ConsciousnessLevel;
+    /** HRV RMSSD en ms — solo en pacientes del kiosco con medición rPPG. */
+    hrv?: number;
+    /** SpO2 estimado por cámara — no clínico. Solo en pacientes del kiosco rPPG. */
+    spo2?: number;
+    heartRateConfidence?: number;
+    respiratoryRateConfidence?: number;
+    hrvConfidence?: number;
+    spo2Confidence?: number;
 }
 export interface Patient {
     id: string;
@@ -39,7 +47,8 @@ export interface Alert {
     patientId: string;
     patientName: string;
     message: string;
-    type: 'wait_exceeded' | 'risk_escalated' | 'critical_vitals';
+    /** Fase 4 adds 'anomalous_vitals' (FC/SpO2 fuera de rango) y 'low_confidence'. */
+    type: 'wait_exceeded' | 'risk_escalated' | 'critical_vitals' | 'anomalous_vitals' | 'low_confidence';
     severity: MTSLevel;
     timeAgo: string;
     read: boolean;

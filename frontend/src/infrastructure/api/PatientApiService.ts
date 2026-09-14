@@ -16,6 +16,13 @@ type BackendVitalSigns = {
     temperature: number;
     oxygenSaturation: number;
     consciousnessLevel: Patient['vitalSigns']['consciousnessLevel'];
+    // Campos rPPG opcionales — presentes solo en pacientes del kiosco con cámara
+    hrv?: number | null;
+    spo2?: number | null;
+    heartRateConfidence?: number | null;
+    respiratoryRateConfidence?: number | null;
+    hrvConfidence?: number | null;
+    spo2Confidence?: number | null;
 };
 
 type BackendPatient = {
@@ -65,15 +72,29 @@ const waitMinutesFromCreatedAt = (createdAt: string): number => {
 };
 
 const toPatient = (data: BackendPatient): Patient => {
-    const vitalSigns = data.vitalSigns ?? {
-        systolicBP: 120,
-        diastolicBP: 80,
-        heartRate: 80,
-        respiratoryRate: 16,
-        temperature: 36.5,
-        oxygenSaturation: 98,
-        consciousnessLevel: 'Alerta',
-    };
+    const bv = data.vitalSigns;
+    const vitalSigns: Patient['vitalSigns'] = bv
+        ? {
+            systolicBP:           bv.systolicBP,
+            diastolicBP:          bv.diastolicBP,
+            heartRate:            bv.heartRate,
+            respiratoryRate:      bv.respiratoryRate,
+            temperature:          bv.temperature,
+            oxygenSaturation:     bv.oxygenSaturation,
+            consciousnessLevel:   bv.consciousnessLevel,
+            // null → undefined so optional fields are absent rather than null
+            hrv:                        bv.hrv                        ?? undefined,
+            spo2:                       bv.spo2                       ?? undefined,
+            heartRateConfidence:        bv.heartRateConfidence        ?? undefined,
+            respiratoryRateConfidence:  bv.respiratoryRateConfidence  ?? undefined,
+            hrvConfidence:              bv.hrvConfidence               ?? undefined,
+            spo2Confidence:             bv.spo2Confidence              ?? undefined,
+        }
+        : {
+            systolicBP: 120, diastolicBP: 80, heartRate: 80,
+            respiratoryRate: 16, temperature: 36.5,
+            oxygenSaturation: 98, consciousnessLevel: 'Alerta',
+        };
 
     return {
         id: data.id,

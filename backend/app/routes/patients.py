@@ -32,6 +32,40 @@ triage_service = TriageService(classifier)
 classify_use_case = ClassifyPatientUseCase(triage_service)
 
 
+def _create_alert_if_absent(
+    db: Session,
+    *,
+    patient_id: object,
+    alert_type: str,
+    message: str,
+    severity: str,
+) -> None:
+    """Insert an alert only when no unread alert of the same type already exists.
+
+    Anti-duplication guard: queries before inserting so kiosk retries or
+    concurrent requests don't produce duplicate notifications for the doctor.
+    """
+    existing = (
+        db.query(models.Alert)
+        .filter(
+            models.Alert.patient_id == patient_id,
+            models.Alert.type == alert_type,
+            models.Alert.read.is_(False),
+        )
+        .first()
+    )
+    if existing is None:
+        db.add(
+            models.Alert(
+                patient_id=patient_id,
+                message=message,
+                type=alert_type,
+                severity=severity,
+                read=False,
+            )
+        )
+
+
 def _to_patient_response(
     patient: models.Patient,
     vital_signs: models.VitalSigns | None,
@@ -46,6 +80,13 @@ def _to_patient_response(
             temperature=vital_signs.temperature,
             oxygenSaturation=vital_signs.oxygen_saturation,
             consciousnessLevel=vital_signs.consciousness_level,
+            # Campos rPPG opcionales — None para pacientes sin medición por cámara
+            hrv=vital_signs.hrv,
+            spo2=vital_signs.spo2,
+            heartRateConfidence=vital_signs.heart_rate_confidence,
+            respiratoryRateConfidence=vital_signs.respiratory_rate_confidence,
+            hrvConfidence=vital_signs.hrv_confidence,
+            spo2Confidence=vital_signs.spo2_confidence,
         )
 
     return PatientResponse(
@@ -134,13 +175,17 @@ def create_patient_from_kiosk(data: KioskPatientCreateRequest, db: Session = Dep
     patient_repository = PatientRepository(db)
     vital_signs_repository = VitalSignsRepository(db)
 
+    # Si el kiosco envía SpO2 medida por cámara, usarla para la clasificación;
+    # de lo contrario asumir saturación normal (98%).
+    effective_spo2 = data.vitalSigns.spo2 if data.vitalSigns.spo2 is not None else 98.0
+
     domain_vitals = VitalSigns(
         systolicBP=120,
         diastolicBP=80,
         heartRate=data.vitalSigns.heartRate,
         respiratoryRate=data.vitalSigns.respiratoryRate,
         temperature=36.6,
-        oxygenSaturation=98,
+        oxygenSaturation=effective_spo2,
         consciousnessLevel=data.vitalSigns.consciousnessLevel,
     )
     triage_result = classify_use_case.execute(
@@ -148,6 +193,7 @@ def create_patient_from_kiosk(data: KioskPatientCreateRequest, db: Session = Dep
         vital_signs=domain_vitals,
         pain_scale=data.vitalSigns.painScale,
         medical_history=[],
+        hrv_rmssd=data.vitalSigns.hrv,
     )
 
     patient = models.Patient(
@@ -176,21 +222,67 @@ def create_patient_from_kiosk(data: KioskPatientCreateRequest, db: Session = Dep
             heart_rate=data.vitalSigns.heartRate,
             respiratory_rate=data.vitalSigns.respiratoryRate,
             temperature=36.6,
-            oxygen_saturation=98,
+            oxygen_saturation=effective_spo2,
             consciousness_level=data.vitalSigns.consciousnessLevel,
+            hrv=data.vitalSigns.hrv,
+            spo2=data.vitalSigns.spo2,
+            heart_rate_confidence=data.vitalSigns.heartRateConfidence,
+            respiratory_rate_confidence=data.vitalSigns.respiratoryRateConfidence,
+            hrv_confidence=data.vitalSigns.hrvConfidence,
+            spo2_confidence=data.vitalSigns.spo2Confidence,
         )
     )
 
+    # \u2500\u2500 Alertas autom\u00e1ticas del kiosco (Fase 4) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    #
+    # Las alertas se crean solo si no existe ya una sin leer del mismo tipo para
+    # este paciente (anti-duplicaci\u00f3n). Como el paciente acaba de crearse, en
+    # la pr\u00e1ctica siempre se crear\u00e1; la comprobaci\u00f3n protege contra reintentos.
+
+    # 1. Nivel cr\u00edtico \u2014 alerta cl\u00ednica preexistente
     if triage_result.level in (1, 2):
-        critical_alert = models.Alert(
+        _create_alert_if_absent(
+            db,
             patient_id=patient.id,
+            alert_type="critical_vitals",
             message=f"Paciente cr\u00edtico ingresado por kiosco - Nivel {triage_result.level}",
-            type="critical_vitals",
             severity=str(triage_result.level),
-            read=False,
         )
-        db.add(critical_alert)
-        db.commit()
+
+    # 2. Signos vitales an\u00f3malos: FC fuera de rango o SpO2 < 90 %
+    hr = data.vitalSigns.heartRate
+    if hr > 120 or hr < 40 or effective_spo2 < 90:
+        _create_alert_if_absent(
+            db,
+            patient_id=patient.id,
+            alert_type="anomalous_vitals",
+            message=(
+                f"Signos vitales an\u00f3malos detectados: "
+                f"FC={hr} bpm, SpO2={effective_spo2:.0f}%"
+            ),
+            severity="2",
+        )
+
+    # 3. Medici\u00f3n de baja confianza: alg\u00fan signo < 0.5
+    confidences = [
+        data.vitalSigns.heartRateConfidence,
+        data.vitalSigns.respiratoryRateConfidence,
+        data.vitalSigns.hrvConfidence,
+        data.vitalSigns.spo2Confidence,
+    ]
+    if any(c is not None and c < 0.5 for c in confidences):
+        _create_alert_if_absent(
+            db,
+            patient_id=patient.id,
+            alert_type="low_confidence",
+            message=(
+                "Medici\u00f3n de baja confianza: "
+                "uno o m\u00e1s signos requieren verificaci\u00f3n manual"
+            ),
+            severity="4",
+        )
+
+    db.commit()
 
     waiting_ahead = (
         db.query(models.Patient)

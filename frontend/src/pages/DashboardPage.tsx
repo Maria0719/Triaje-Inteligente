@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Bell, Search, Users, AlertTriangle, Clock, CheckCircle, PlusCircle, Activity } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
@@ -41,6 +41,13 @@ export default function DashboardPage() {
     const criticalCount = activePatients.filter(p => p.mtsLevel <= 2).length;
     const avgWait = Math.round(activePatients.reduce((s, p) => s + p.waitTimeMinutes, 0) / (activePatients.length || 1));
     const unreadAlerts = alerts.filter(a => !a.read).length;
+
+    // IDs de pacientes con alerta de signos anómalos sin leer — usados para
+    // mostrar badge rojo en PatientCard (Fase 4).
+    const anomalousPatientIds = useMemo(
+        () => new Set(alerts.filter(a => !a.read && a.type === 'anomalous_vitals').map(a => a.patientId)),
+        [alerts],
+    );
     let filtered = activePatients;
     if (filter === 'critical')
         filtered = filtered.filter(p => p.mtsLevel <= 2);
@@ -210,7 +217,7 @@ export default function DashboardPage() {
 
                   <p className="font-medium">No hay pacientes en esta categoría</p> 
 
-                </div>) : (filtered.map(p => (<PatientCard key={p.id} patient={p} onMarkAttended={handleMarkAttended}/>)))}
+                </div>) : (filtered.map(p => (<PatientCard key={p.id} patient={p} onMarkAttended={handleMarkAttended} hasAnomalousAlert={anomalousPatientIds.has(p.id)}/>)))}
 
             </div>
 

@@ -67,6 +67,16 @@ class VitalSigns(Base):
     consciousness_level: Mapped[str] = mapped_column(String(50), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    # Campos rPPG opcionales (Fase 3): solo presentes en pacientes del kiosco
+    # con medición por cámara. Nullable para no romper registros existentes
+    # ni el formulario del médico.
+    hrv: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spo2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    heart_rate_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    respiratory_rate_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hrv_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spo2_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     patient: Mapped[Patient] = relationship("Patient", back_populates="vital_signs")
 
 

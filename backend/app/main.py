@@ -40,6 +40,29 @@ def ensure_patient_updated_at_column() -> None:
 ensure_patient_updated_at_column()
 
 
+def ensure_vital_signs_rppg_columns() -> None:
+    """Best-effort migration: adds rPPG optional columns to vital_signs if absent."""
+    rppg_columns = [
+        ("hrv",                        "REAL"),
+        ("spo2",                       "REAL"),
+        ("heart_rate_confidence",      "REAL"),
+        ("respiratory_rate_confidence","REAL"),
+        ("hrv_confidence",             "REAL"),
+        ("spo2_confidence",            "REAL"),
+    ]
+    with engine.begin() as connection:
+        existing = connection.execute(text("PRAGMA table_info(vital_signs)")).fetchall()
+        existing_names = {row[1] for row in existing}
+        for col_name, col_type in rppg_columns:
+            if col_name not in existing_names:
+                connection.execute(
+                    text(f"ALTER TABLE vital_signs ADD COLUMN {col_name} {col_type}")
+                )
+
+
+ensure_vital_signs_rppg_columns()
+
+
 def create_default_user():
     """Create a default admin user if it doesn't exist."""
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
