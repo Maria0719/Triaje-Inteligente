@@ -1,10 +1,19 @@
 /**
- * Script temporal de verificación manual de Fase 2 (rPPG). NO es parte del
- * conjunto de tests del proyecto — se elimina después de reportar resultados.
+ * Suite de tests de RppgVitalSignsDetector (Fase 2 — rPPG).
  *
- * Ejercita RppgVitalSignsDetector con datos sintéticos (mockeando
- * FaceCaptureService) para obtener números concretos sin depender de una
- * cámara física real, que este entorno no tiene.
+ * Ejercita el detector con datos sintéticos (mockeando FaceCaptureService)
+ * para no depender de una cámara física real, y protege con aserciones
+ * concretas dos cosas que ya fallaron antes en este proyecto:
+ *
+ *   1. Que sampleQualityRatio siga penalizando la confidence cuando se pierde
+ *      señal real (p. ej. el paciente se tapa la cámara), y no compare contra
+ *      sí mismo de forma tautológica (bug histórico ya corregido — ver
+ *      comentario en RppgVitalSignsDetector.processBuffer).
+ *   2. Que la calibración de SNR_FOR_MAX_CONFIDENCE (recalibrada de 5 a 4 a
+ *      partir de 4 mediciones reales del kiosco, rango de snr de FC
+ *      2.76–3.48, ver auditoría) no vuelva a subirse sin darse cuenta a un
+ *      valor que deje la confidence estructuralmente baja incluso en
+ *      capturas limpias.
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { RoiName, RoiSample, RoiSignalBuffer } from './RoiSignalTypes';
@@ -34,6 +43,12 @@ vi.mock('./FaceCaptureService', () => {
 });
 
 const { RppgVitalSignsDetector } = await import('./RppgVitalSignsDetector');
+
+/** Acceso de test a snrToConfidence, privado en la clase — no cambia su visibilidad real. */
+type SnrToConfidenceAccessor = { snrToConfidence(snr: number, sampleQualityRatio: number): number };
+function accessSnrToConfidence(): SnrToConfidenceAccessor {
+  return new RppgVitalSignsDetector({} as HTMLVideoElement) as unknown as SnrToConfidenceAccessor;
+}
 
 const ROIS: RoiName[] = ['forehead', 'leftCheek', 'rightCheek'];
 
@@ -83,8 +98,8 @@ function generateSyntheticBuffer(opts: {
   };
 }
 
-describe('Verificación manual Fase 2', () => {
-  it('1) FC en rango fisiológico de reposo + 2) tiempo de captura ~20s', async () => {
+describe('RppgVitalSignsDetector.measure()', () => {
+  it('devuelve una FC en rango fisiológico de reposo y completa el progreso en ~20s', async () => {
     vi.useFakeTimers();
     mockState.buffer = generateSyntheticBuffer({ durationS: 20, fps: 30, bpm: 72 });
 
@@ -96,28 +111,21 @@ describe('Verificación manual Fase 2', () => {
     // Deja que el .then() de service.start() corra y arme runCaptureWindow
     // (setInterval/setTimeout) antes de avanzar el reloj falso.
     await vi.advanceTimersByTimeAsync(0);
-
     await vi.advanceTimersByTimeAsync(10_000);
     const progressAt10s = progressCalls[progressCalls.length - 1];
-
     await vi.advanceTimersByTimeAsync(10_000);
     const progressAt20s = progressCalls[progressCalls.length - 1];
 
     const result = await resultPromise;
     vi.useRealTimers();
 
-    console.log('--- CHEQUEO 1: FC en rango fisiológico ---');
-    console.log('heartRate.value =', result.heartRate.value, 'bpm');
-    console.log('heartRate.confidence =', result.heartRate.confidence);
-    console.log('--- CHEQUEO 2: tiempo de captura ---');
-    console.log('progress a los 10s =', progressAt10s);
-    console.log('progress a los 20s =', progressAt20s);
-    console.log('total de llamadas a onProgress =', progressCalls.length);
-
     expect(result.heartRate.value).toBeGreaterThanOrEqual(30);
+    expect(result.heartRate.value).toBeLessThanOrEqual(220);
+    expect(progressAt10s).toBeCloseTo(50, 0);
+    expect(progressAt20s).toBe(100);
   }, 15000);
 
-  it('3) confidence de FC baja al tapar la cámara 4s de los 20s', async () => {
+  it('la confidence de FC baja proporcionalmente cuando se pierde señal real (cámara tapada 4 de los 20s)', async () => {
     vi.useFakeTimers();
 
     // Escenario limpio: 20s completos de señal a 72 bpm.
@@ -130,6 +138,7 @@ describe('Verificación manual Fase 2', () => {
 
     // Escenario "tapado": mismos 20s, pero sin ninguna muestra entre el
     // segundo 8 y el 12 (4s sin rostro detectado, como al cubrir la cámara).
+    // sampleQualityRatio esperado: 16s de señal real sobre 20s ideales = 0.8.
     mockState.buffer = generateSyntheticBuffer({
       durationS: 20,
       fps: 30,
@@ -145,10 +154,47 @@ describe('Verificación manual Fase 2', () => {
 
     vi.useRealTimers();
 
-    console.log('--- CHEQUEO 3: confidence al tapar la cámara ---');
-    console.log('ANTES  (20s limpios)      -> heartRate.confidence =', cleanResult.heartRate.confidence, ' heartRate.value =', cleanResult.heartRate.value);
-    console.log('DESPUÉS (4s tapada, 8-12s) -> heartRate.confidence =', coveredResult.heartRate.confidence, ' heartRate.value =', coveredResult.heartRate.value);
-
-    expect(true).toBe(true); // este test es de reporte, no de assert estricto
+    // La pérdida de señal debe REDUCIR la confidence, no dejarla intacta —
+    // esto es lo que sampleQualityRatio existe para garantizar (ver el bug
+    // histórico donde se comparaba tautológicamente contra sí mismo).
+    expect(coveredResult.heartRate.confidence).toBeLessThan(cleanResult.heartRate.confidence);
+    expect(coveredResult.heartRate.confidence).toBeGreaterThan(0);
+    // La degradación debe ser proporcional al hueco real (~20% de datos
+    // perdidos → ~20% menos confidence), no abrupta ni descontada dos veces.
+    expect(coveredResult.heartRate.confidence).toBeCloseTo(cleanResult.heartRate.confidence * 0.8, 1);
   }, 15000);
+});
+
+describe('snrToConfidence — calibración SNR_FOR_MAX_CONFIDENCE', () => {
+  // snr de FC despejado de 4 mediciones reales del kiosco (fps 23–28 reales,
+  // ROI de muestreo 160×120px) durante el diagnóstico del Bug #1. Ninguna
+  // cerca del techo original de 5, lo que motivó recalibrar
+  // SNR_FOR_MAX_CONFIDENCE de 5 a 4. Ver auditoría para el despeje completo.
+  const REAL_MEASUREMENTS = [
+    { snr: 2.9169, ratio: 0.77, expectedConfidence: 0.492 },
+    { snr: 2.8397, ratio: 0.948, expectedConfidence: 0.581 },
+    { snr: 2.7626, ratio: 0.91, expectedConfidence: 0.535 },
+    { snr: 3.4756, ratio: 0.942, expectedConfidence: 0.777 },
+  ];
+
+  it.each(REAL_MEASUREMENTS)(
+    'snr=$snr, sampleQualityRatio=$ratio -> confidence ≈ $expectedConfidence',
+    ({ snr, ratio, expectedConfidence }) => {
+      expect(accessSnrToConfidence().snrToConfidence(snr, ratio)).toBeCloseTo(expectedConfidence, 2);
+    },
+  );
+
+  it('satura en 1 a partir de snr = SNR_FOR_MAX_CONFIDENCE (4) con ratio perfecto', () => {
+    const detector = accessSnrToConfidence();
+    expect(detector.snrToConfidence(4, 1)).toBeCloseTo(1, 5);
+    expect(detector.snrToConfidence(10, 1)).toBe(1); // no debe superar 1 aunque el snr sea mucho mayor
+  });
+
+  it('cae a 0 en snr <= 1 (banda plana, sin periodicidad real)', () => {
+    expect(accessSnrToConfidence().snrToConfidence(1, 1)).toBe(0);
+  });
+
+  it('regresión: el snr máximo observado en datos reales (3.48) ya no debe quedar por debajo de 0.8 de confidence base — si esto falla, alguien subió SNR_FOR_MAX_CONFIDENCE de vuelta hacia el techo viejo (5)', () => {
+    expect(accessSnrToConfidence().snrToConfidence(3.4756, 1)).toBeGreaterThan(0.8);
+  });
 });

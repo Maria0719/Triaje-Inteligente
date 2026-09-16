@@ -46,7 +46,7 @@ export default function LoginPage() {
       setIsLoggedIn(true); 
       navigate('/dashboard');
     }
-    catch (error) {
+    catch {
       setAuthError('Correo o contraseña incorrectos');
     }
   };
@@ -109,7 +109,7 @@ export default function LoginPage() {
             // Register Form
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder="Nombre completo"
@@ -124,7 +124,7 @@ export default function LoginPage() {
               </div>
 
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="email"
                   placeholder="Correo electrónico"
@@ -139,7 +139,7 @@ export default function LoginPage() {
               </div>
 
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="password"
                   placeholder="Contraseña"
@@ -154,7 +154,7 @@ export default function LoginPage() {
               </div>
 
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="password"
                   placeholder="Confirmar contraseña"
@@ -202,10 +202,10 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-4"> 
             
               <div className="relative"> 
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /> 
-                <Input 
-                  type="email" 
-                  placeholder="Correo electrónico" 
+                <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="email"
+                  placeholder="Correo electrónico"
                   value={email} 
                   onChange={(e) => {
                     setEmail(e.target.value);
@@ -219,10 +219,10 @@ export default function LoginPage() {
 
               
               <div className="relative"> 
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /> 
-                <Input 
-                  type="password" 
-                  placeholder="Contraseña" 
+                <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="password"
+                  placeholder="Contraseña"
                   value={password} 
                   onChange={(e) => {
                     setPassword(e.target.value);

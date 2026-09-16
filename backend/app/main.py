@@ -16,7 +16,16 @@ app = FastAPI(title="TriageAI API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8080"],
+    # Lista explícita de orígenes de desarrollo permitidos (nunca "*"): 5173 es
+    # el puerto por defecto de Vite, 8080 el configurado en vite.config.ts.
+    # 8081 se agrega porque vite.config.ts no fija strictPort=true, así que si
+    # 8080 está ocupado por otro proceso, Vite cae automáticamente al
+    # siguiente puerto libre sin avisar — visto en la práctica el 2026-09-15.
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://localhost:8081",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )

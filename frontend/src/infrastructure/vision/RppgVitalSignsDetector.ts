@@ -37,7 +37,6 @@ import {
   averageChannelAcrossRois,
   resampleUniform,
   detrend,
-  normalize,
   applyPOS,
   bandpassFilterFFT,
   findDominantFrequency,
@@ -111,6 +110,46 @@ const MIN_PEAK_INTERVAL_MS = 60_000 / MAX_PLAUSIBLE_HEART_RATE_BPM;
  * fracción de la de FC — más conservadora a propósito.
  */
 const RESPIRATORY_CONFIDENCE_PENALTY = 0.6;
+
+/**
+ * Penalización de confidence aplicada a SpO2 frente a FC. NO es la misma
+ * constante que RESPIRATORY_CONFIDENCE_PENALTY aunque hoy comparta el mismo
+ * valor numérico: son penalizaciones de cosas distintas por razones distintas
+ * (SpO2 se limita porque una cámara RGB de consumo nunca puede igualar a un
+ * pulsioxímetro calibrado — ver estimateSpo2 en signalProcessing.ts — no
+ * porque su canal sea ambiguo como el de FR). Mantenerlas separadas evita que
+ * ajustar la penalización de FR mueva sin querer la de SpO2, o viceversa, si
+ * en el futuro se recalibran de forma independiente.
+ */
+const SPO2_CONFIDENCE_PENALTY = 0.6;
+
+/**
+ * SNR (pico / promedio-de-banda, ver findDominantFrequency) que se considera
+ * "señal perfecta" y mapea a snrScore = 1 en snrToConfidence.
+ *
+ * Recalibrado a partir de 4 mediciones reales del kiosco (fps 23–28,
+ * ROI de muestreo 160×120 px) durante el diagnóstico del Bug #1: el snr de FC
+ * medido cayó en el rango 2.76–3.48 en las 4 capturas, ninguna cerca del techo
+ * original de 5. Ese techo nunca se alcanzaba en la práctica con este
+ * hardware/resolución de ROI, lo que mantenía confidence estructuralmente
+ * bajo incluso en capturas limpias. Se sube el piso de referencia a 4 (con
+ * margen sobre el máximo observado de 3.48) en vez de a 3.5 para no saturar
+ * inmediatamente en 1.0 con las mismas condiciones que produjeron estos datos.
+ *
+ * Sigue siendo un valor heurístico, no una validación clínica — debe
+ * revisarse de nuevo si mediciones futuras en otras condiciones (luz, ROI,
+ * hardware) muestran un rango de snr distinto a este.
+ */
+const SNR_FOR_MAX_CONFIDENCE = 4;
+
+/**
+ * Flag temporal de diagnóstico (Bug #1): activa el console.log con los
+ * insumos crudos de la fórmula de confidence en processBuffer. Poner en
+ * false para silenciarlo sin borrar el código; quitarlo del todo una vez
+ * que la recalibración de SNR_FOR_MAX_CONFIDENCE quede validada con más
+ * mediciones reales.
+ */
+const DEBUG_RPPG_CONFIDENCE = false;
 
 // ─── Clase principal ────────────────────────────────────────────────────────
 
@@ -349,7 +388,32 @@ export class RppgVitalSignsDetector implements IVitalSignsDetector {
     // SpO2 por cámara es, en el mejor de los casos, una aproximación gruesa
     // (ver comentario de estimateSpo2); se limita su confianza a un techo
     // artificial para que nunca se lea como equivalente a un pulsioxímetro.
-    const spo2Confidence = Number.isFinite(spo2Value) ? heartRateConfidence * 0.6 : 0;
+    const spo2Confidence = Number.isFinite(spo2Value) ? heartRateConfidence * SPO2_CONFIDENCE_PENALTY : 0;
+
+    // TODO(diagnóstico temporal — Bug #1/recalibración, remover cuando se
+    // termine de validar SNR_FOR_MAX_CONFIDENCE con más mediciones reales):
+    // vuelca los insumos crudos de la fórmula de confidence. Incluye tanto el
+    // promedio simple viejo (referencia histórica) como el promedio ponderado
+    // sin hrv que PatientKioskPage.averageConfidence() usa realmente para
+    // decidir aceptar/rechazar — así el log refleja la decisión real, no una
+    // aproximación. Si se cambian los pesos allá, actualizar aquí también.
+    if (DEBUG_RPPG_CONFIDENCE) {
+      const weightedAverageConfidence =
+        heartRateConfidence * 0.4 + spo2Confidence * 0.4 + respiratoryRateConfidence * 0.2;
+      console.log('[DIAGNÓSTICO rPPG]', {
+        approxFps: buffer.approxFps,
+        totalSamples: buffer.samples.length,
+        expectedSamples: expectedRawFrames,
+        sampleQualityRatio,
+        heartRateConfidence,
+        respiratoryRateConfidence,
+        hrvConfidence,
+        spo2Confidence,
+        simpleAverageConfidence:
+          (heartRateConfidence + respiratoryRateConfidence + hrvConfidence + spo2Confidence) / 4,
+        weightedAverageConfidence,
+      });
+    }
 
     return {
       heartRate: {
@@ -376,10 +440,11 @@ export class RppgVitalSignsDetector implements IVitalSignsDetector {
    * en un confidence [0, 1], escalado además por la calidad/cantidad de
    * muestras disponibles. Los coeficientes son heurísticos: no provienen de
    * una validación clínica, solo buscan que confidence baje cuando la señal
-   * es claramente pobre (poco pico, pocas muestras).
+   * es claramente pobre (poco pico, pocas muestras). Ver SNR_FOR_MAX_CONFIDENCE
+   * para el origen del techo actual (recalibrado con mediciones reales).
    */
   private snrToConfidence(snr: number, sampleQualityRatio: number): number {
-    const snrScore = clamp((snr - 1) / 4, 0, 1);
+    const snrScore = clamp((snr - 1) / (SNR_FOR_MAX_CONFIDENCE - 1), 0, 1);
     return clamp(snrScore * sampleQualityRatio, 0, 1);
   }
 

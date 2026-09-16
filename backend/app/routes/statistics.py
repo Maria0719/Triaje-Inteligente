@@ -31,7 +31,6 @@ def get_statistics_summary(db: Session = Depends(get_db)):
     else:
         average_wait_time = 0
 
-    today_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     attended_today = (
         db.query(Patient)
         .filter(

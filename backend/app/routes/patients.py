@@ -23,6 +23,7 @@ from app.domain.schemas import (
     TriageHistoryItem,
     VitalSignsPayload,
 )
+from app.services.alert_service import AlertService
 from app.services.classifier import TriageClassifier
 from app.services.triage_service import ClassifyPatientUseCase, TriageService
 
@@ -30,40 +31,6 @@ router = APIRouter()
 classifier = TriageClassifier()
 triage_service = TriageService(classifier)
 classify_use_case = ClassifyPatientUseCase(triage_service)
-
-
-def _create_alert_if_absent(
-    db: Session,
-    *,
-    patient_id: object,
-    alert_type: str,
-    message: str,
-    severity: str,
-) -> None:
-    """Insert an alert only when no unread alert of the same type already exists.
-
-    Anti-duplication guard: queries before inserting so kiosk retries or
-    concurrent requests don't produce duplicate notifications for the doctor.
-    """
-    existing = (
-        db.query(models.Alert)
-        .filter(
-            models.Alert.patient_id == patient_id,
-            models.Alert.type == alert_type,
-            models.Alert.read.is_(False),
-        )
-        .first()
-    )
-    if existing is None:
-        db.add(
-            models.Alert(
-                patient_id=patient_id,
-                message=message,
-                type=alert_type,
-                severity=severity,
-                read=False,
-            )
-        )
 
 
 def _to_patient_response(
@@ -144,16 +111,9 @@ def create_patient(data: PatientCreateRequest, db: Session = Depends(get_db)):
     )
     vital_signs = vital_signs_repository.save(vital_signs)
 
-    if data.mtsLevel in (1, 2):
-        critical_alert = models.Alert(
-            patient_id=patient.id,
-            message=f"Paciente cr\u00edtico ingresado - Nivel {data.mtsLevel}",
-            type="critical_vitals",
-            severity=str(data.mtsLevel),
-            read=False,
-        )
-        db.add(critical_alert)
-        db.commit()
+    alert_service = AlertService(db)
+    alert_service.create_critical_alert_if_needed(patient_id=patient.id, mts_level=data.mtsLevel)
+    db.commit()
 
     return _to_patient_response(patient, vital_signs)
 
@@ -233,63 +193,30 @@ def create_patient_from_kiosk(data: KioskPatientCreateRequest, db: Session = Dep
         )
     )
 
-    # \u2500\u2500 Alertas autom\u00e1ticas del kiosco (Fase 4) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    # \u2500\u2500 Alertas autom\u00e1ticas del kiosco (Fase 4) \u2500\u2500
     #
-    # Las alertas se crean solo si no existe ya una sin leer del mismo tipo para
-    # este paciente (anti-duplicaci\u00f3n). Como el paciente acaba de crearse, en
-    # la pr\u00e1ctica siempre se crear\u00e1; la comprobaci\u00f3n protege contra reintentos.
-
-    # 1. Nivel cr\u00edtico \u2014 alerta cl\u00ednica preexistente
-    if triage_result.level in (1, 2):
-        _create_alert_if_absent(
-            db,
-            patient_id=patient.id,
-            alert_type="critical_vitals",
-            message=f"Paciente cr\u00edtico ingresado por kiosco - Nivel {triage_result.level}",
-            severity=str(triage_result.level),
-        )
-
-    # 2. Signos vitales an\u00f3malos: FC fuera de rango o SpO2 < 90 %
-    hr = data.vitalSigns.heartRate
-    if hr > 120 or hr < 40 or effective_spo2 < 90:
-        _create_alert_if_absent(
-            db,
-            patient_id=patient.id,
-            alert_type="anomalous_vitals",
-            message=(
-                f"Signos vitales an\u00f3malos detectados: "
-                f"FC={hr} bpm, SpO2={effective_spo2:.0f}%"
-            ),
-            severity="2",
-        )
-
-    # 3. Medici\u00f3n de baja confianza: alg\u00fan signo < 0.5
-    confidences = [
-        data.vitalSigns.heartRateConfidence,
-        data.vitalSigns.respiratoryRateConfidence,
-        data.vitalSigns.hrvConfidence,
-        data.vitalSigns.spo2Confidence,
-    ]
-    if any(c is not None and c < 0.5 for c in confidences):
-        _create_alert_if_absent(
-            db,
-            patient_id=patient.id,
-            alert_type="low_confidence",
-            message=(
-                "Medici\u00f3n de baja confianza: "
-                "uno o m\u00e1s signos requieren verificaci\u00f3n manual"
-            ),
-            severity="4",
-        )
-
+    # Delegadas a AlertService, que aplica el mismo guard anti-duplicaci\u00f3n
+    # para los 3 tipos de alerta (antes solo lo aplicaba este endpoint, no
+    # create_patient).
+    alert_service = AlertService(db)
+    alert_service.create_critical_alert_if_needed(
+        patient_id=patient.id, mts_level=triage_result.level, source="por kiosco"
+    )
+    alert_service.create_anomalous_vitals_alert_if_needed(
+        patient_id=patient.id, heart_rate=data.vitalSigns.heartRate, spo2=effective_spo2
+    )
+    alert_service.create_low_confidence_alert_if_needed(
+        patient_id=patient.id,
+        confidences=[
+            data.vitalSigns.heartRateConfidence,
+            data.vitalSigns.respiratoryRateConfidence,
+            data.vitalSigns.hrvConfidence,
+            data.vitalSigns.spo2Confidence,
+        ],
+    )
     db.commit()
 
-    waiting_ahead = (
-        db.query(models.Patient)
-        .filter(models.Patient.status == "waiting", models.Patient.mts_level <= triage_result.level)
-        .count()
-    )
-    estimated_wait_minutes = max(0, (waiting_ahead - 1) * 7)
+    estimated_wait_minutes = alert_service.estimate_wait_minutes(mts_level=triage_result.level)
 
     return KioskPatientCreateResponse(
         patientId=patient.id,

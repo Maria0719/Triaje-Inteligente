@@ -33,7 +33,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Loader2, HeartPulse, Activity, Waves, Droplet, RefreshCw, AlertTriangle } from 'lucide-react';
 import { IVitalSignsDetector, VitalSignsMeasurement } from '@/domain/ports/IVitalSignsDetector';
-import { SimulatedVitalSignsDetector } from '@/domain/services/SimulatedVitalSignsDetector';
+import { SimulatedVitalSignsDetector } from '@/infrastructure/vision/SimulatedVitalSignsDetector';
 import { RppgVitalSignsDetector } from '@/infrastructure/vision/RppgVitalSignsDetector';
 import type { FaceCaptureQuality } from '@/infrastructure/vision/RoiSignalTypes';
 import type { ConsciousnessLevel } from '@/domain/entities/Patient';
@@ -126,18 +126,47 @@ const DEFAULT_QUALITY: FaceCaptureQuality = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Calcula la confianza promedio de todos los campos de VitalSignsMeasurement
- * que tienen un valor de `confidence` definido.
+ * Pesos de cada signo en la confianza PROMEDIO que decide si se descarta la
+ * medición (ver averageConfidence). heartRate y spo2 pesan el doble que
+ * respiratoryRate porque la frecuencia respiratoria es estructuralmente más
+ * ruidosa y ambigua con esta técnica (ver comentario junto a
+ * RESPIRATORY_CONFIDENCE_PENALTY en RppgVitalSignsDetector.ts).
+ *
+ * hrv NO tiene peso propio y no aparece aquí a propósito: hrvConfidence es
+ * matemáticamente heartRateConfidence × (proporción de picos R-R detectados)
+ * (ver processBuffer en RppgVitalSignsDetector.ts) — no es una medición
+ * independiente de la calidad de la señal, solo de cuántos picos se
+ * detectaron. Incluirla en el promedio contaría la calidad cardíaca dos
+ * veces. Se sigue mostrando al doctor en su propia MeasurementCard como dato
+ * informativo, solo no participa en la decisión de aceptar/rechazar.
+ */
+const CONFIDENCE_WEIGHTS: Record<'heartRate' | 'respiratoryRate' | 'spo2', number> = {
+  heartRate: 0.4,
+  spo2: 0.4,
+  respiratoryRate: 0.2,
+};
+
+/**
+ * Calcula la confianza promedio PONDERADA de heartRate/respiratoryRate/spo2
+ * (ver CONFIDENCE_WEIGHTS). hrv se excluye deliberadamente — ver comentario
+ * de CONFIDENCE_WEIGHTS. Normaliza por el peso total de los campos presentes,
+ * para seguir funcionando igual que antes si algún campo viene sin `confidence`.
  * Devuelve 1 (confianza máxima) si ningún campo tiene `confidence`.
  */
 function averageConfidence(result: VitalSignsMeasurement): number {
-  const values: number[] = [];
-  if (result.heartRate.confidence !== undefined)      values.push(result.heartRate.confidence);
-  if (result.respiratoryRate.confidence !== undefined) values.push(result.respiratoryRate.confidence);
-  if (result.hrv?.confidence !== undefined)           values.push(result.hrv.confidence);
-  if (result.spo2?.confidence !== undefined)          values.push(result.spo2.confidence);
-  if (values.length === 0) return 1;
-  return values.reduce((a, b) => a + b, 0) / values.length;
+  const weighted: { value: number; weight: number }[] = [];
+  if (result.heartRate.confidence !== undefined) {
+    weighted.push({ value: result.heartRate.confidence, weight: CONFIDENCE_WEIGHTS.heartRate });
+  }
+  if (result.respiratoryRate.confidence !== undefined) {
+    weighted.push({ value: result.respiratoryRate.confidence, weight: CONFIDENCE_WEIGHTS.respiratoryRate });
+  }
+  if (result.spo2?.confidence !== undefined) {
+    weighted.push({ value: result.spo2.confidence, weight: CONFIDENCE_WEIGHTS.spo2 });
+  }
+  if (weighted.length === 0) return 1;
+  const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
+  return weighted.reduce((sum, w) => sum + w.value * w.weight, 0) / totalWeight;
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -494,7 +523,14 @@ export default function PatientKioskPage() {
               <p className="text-base md:text-lg text-slate-600 mt-1">Estamos tomando tus signos vitales. Mira a la cámara.</p>
             </div>
 
-            <div className="relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-video flex items-center justify-center">
+            {/* aspect-[3/4] en mobile: la cámara frontal de un teléfono en retrato
+                es más vertical que 16:9; forzar aspect-video ahí recortaba
+                agresivo los costados del encuadre del paciente. Es un cambio
+                puramente visual del contenedor — FaceCaptureService.processFrame
+                dibuja el <video> real (resolución del stream) al canvas de
+                muestreo con drawImage, sin pasar por este contenedor ni su CSS,
+                así que no afecta el ROI ni el buffer de señal. */}
+            <div className="relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-[3/4] md:aspect-video flex items-center justify-center">
               <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
               {!streamRef.current && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600">
@@ -599,7 +635,7 @@ export default function PatientKioskPage() {
               <p className="text-base text-slate-500 mt-1">0 = sin dolor · 10 = dolor insoportable</p>
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {Array.from({ length: 11 }, (_, i) => (
                 <button
                   key={i}

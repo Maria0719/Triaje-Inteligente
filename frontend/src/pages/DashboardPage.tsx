@@ -80,19 +80,23 @@ export default function DashboardPage() {
 
       
 
-      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 shrink-0"> 
+      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 shrink-0">
 
-        <div className="flex items-center gap-2"> 
+        {/* Logo oculto en mobile: la barra de AppLayout ya muestra "TriageAI" ahí;
+            duplicarlo aquí generaba dos franjas de marca apiladas (ver auditoría). */}
+        <div className="hidden md:flex items-center gap-2">
 
-          <Shield className="h-6 w-6 text-primary"/> 
+          <Shield className="h-6 w-6 text-primary"/>
 
-          <span className="font-bold text-primary">TriageAI</span> 
+          <span className="font-bold text-primary">TriageAI</span>
 
         </div>
 
-        <span className="text-sm font-medium text-muted-foreground hidden md:block">Hospital Universitario San José</span> 
+        <span className="text-sm font-medium text-muted-foreground hidden md:block">Hospital Universitario San José</span>
 
-        <div className="flex items-center gap-4"> 
+        {/* ml-auto compensa la ausencia del logo en mobile: sin él, justify-between
+            con un solo hijo visible lo alinearía a la izquierda en vez de a la derecha. */}
+        <div className="flex items-center gap-4 ml-auto md:ml-0">
 
           <button className="relative p-2 hover:bg-muted rounded-lg transition-colors"> 
 

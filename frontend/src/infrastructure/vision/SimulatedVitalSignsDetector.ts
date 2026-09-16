@@ -1,19 +1,21 @@
 /**
  * Implementación simulada del detector de signos vitales.
  *
- * Capa: Dominio — services
+ * Capa: Infraestructura — vision
  *
  * Implementa IVitalSignsDetector usando Math.random() y temporizadores
  * del navegador para generar valores plausibles sin acceder a hardware
- * real. Es el adaptador de "prueba/demo" del puerto IVitalSignsDetector.
+ * real. Es el adaptador de "prueba/demo" del puerto IVitalSignsDetector —
+ * vive junto a RppgVitalSignsDetector porque ambos son adaptadores
+ * concretos del mismo puerto y ninguno pertenece a domain/ (domain/ no debe
+ * conocer implementaciones concretas, solo el puerto que ambas cumplen).
  *
  * Nota (Fase 3): painScale y consciousnessLevel fueron eliminados de esta
  * implementación porque ahora son auto-reportados por el paciente en pasos
  * dedicados del kiosco. Este detector solo simula lo que mediría la cámara.
  *
- * Esta clase DEBE ser reemplazada en el futuro por RppgVitalSignsDetector
- * (Fase 2); PatientKioskPage no necesitará cambiar porque depende únicamente
- * del puerto IVitalSignsDetector, no de esta clase concreta.
+ * Se usa como fallback de "Modo demo" cuando la cámara o MediaPipe no están
+ * disponibles (ver RppgVitalSignsDetector y PatientKioskPage).
  */
 
 import { IVitalSignsDetector, VitalSignsMeasurement } from '@/domain/ports/IVitalSignsDetector';

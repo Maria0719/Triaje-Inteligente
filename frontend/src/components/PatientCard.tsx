@@ -148,15 +148,16 @@ export default function PatientCard({ patient, onMarkAttended, hasAnomalousAlert
                 </span>
 
                 <div className="flex gap-2">
+                    {/* h-11 (44px): tamaño táctil mínimo recomendado — antes py-1.5 daba ~28px de alto. */}
                     <button
                         onClick={(e) => { e.stopPropagation(); navigate(`/patients/${patient.id}`); }}
-                        className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-3 py-1.5 hover:bg-primary/5 transition-colors"
+                        className="flex items-center gap-1 h-11 text-xs font-medium text-primary border border-primary/30 rounded-lg px-3 hover:bg-primary/5 transition-colors"
                     >
                         <Eye className="h-3.5 w-3.5"/> Ver detalle
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); onMarkAttended?.(patient.id); }}
-                        className="flex items-center gap-1 text-xs font-medium text-primary-foreground bg-mts-4 rounded-lg px-3 py-1.5 hover:opacity-90 transition-colors"
+                        className="flex items-center gap-1 h-11 text-xs font-medium text-primary-foreground bg-mts-4 rounded-lg px-3 hover:opacity-90 transition-colors"
                     >
                         <CheckCircle className="h-3.5 w-3.5"/> Atendido
                     </button>

@@ -311,8 +311,10 @@ export default function PatientDetailPage() {
                     </div>
                 </div>
 
-                {/* Acciones */}
-                <div className="flex gap-3">
+                {/* Acciones — apiladas en mobile: el texto de los botones con
+                    whitespace-nowrap no cabía a la mitad del ancho en pantallas
+                    angostas y se recortaba en el borde derecho. */}
+                <div className="flex flex-col sm:flex-row gap-3">
                     <Button
                         variant="outline"
                         className="flex-1"

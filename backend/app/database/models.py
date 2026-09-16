@@ -6,6 +6,18 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
+
+# DEUDA TÉCNICA (documentada, no corregida en esta fase): este proyecto usaba
+# PostgreSQL antes del refactor que introdujo connection.py con SQLite fijo
+# (ver auditoría — el DATABASE_URL con default a Postgres se perdió en ese
+# cambio). sqlalchemy.dialects.postgresql.UUID es un tipo específico de ese
+# dialecto, pero SQLAlchemy lo compila correctamente contra SQLite vía un
+# fallback genérico a CHAR(32) (verificado en la auditoría corriendo
+# create_all contra una base SQLite nueva) — por eso sigue funcionando pese a
+# no correr sobre Postgres. Si en algún momento se quiere generalizar esto
+# para no depender de un tipo atado a un dialecto que ya no se usa, debería
+# migrarse a sqlalchemy.types.Uuid (genérico, disponible desde SQLAlchemy 2.0,
+# ya usado en este proyecto).
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

@@ -269,9 +269,11 @@ export default function StatisticsPage() {
 
             <h3 className="text-sm font-semibold mb-4">Tiempo de espera vs. recomendado</h3>
 
-            <div className="space-y-1">
+            <div className="space-y-2 md:space-y-0">
 
-              <div className="grid grid-cols-4 text-xs text-muted-foreground font-medium py-2 border-b border-border">
+              {/* Encabezado — solo aplica al formato de tabla de md: en adelante;
+                  en mobile cada fila ya lleva su propia etiqueta por campo. */}
+              <div className="hidden md:grid md:grid-cols-4 text-xs text-muted-foreground font-medium py-2 border-b border-border">
 
                 <span>Nivel</span>
 
@@ -285,21 +287,32 @@ export default function StatisticsPage() {
 
               {waitByLevel.map(w => {
             const exceeded = w.actual > w.recommended;
-            return (<div key={w.level} className="grid grid-cols-4 text-sm py-2.5 border-b border-border/50">
+            const recommendedLabel = w.recommended === 0 ? 'Inmediato' : `${w.recommended} min`;
+            return (
+              <div
+                key={w.level}
+                className="flex flex-col gap-1.5 rounded-lg bg-muted/30 px-3 py-3 md:grid md:grid-cols-4 md:items-center md:rounded-none md:bg-transparent md:px-0 md:py-2.5 md:border-b md:border-border/50"
+              >
+                <span className="font-medium text-sm">{w.level}</span>
 
-                    <span className="font-medium">{w.level}</span>
+                <div className="flex items-center justify-between text-sm md:block md:text-center">
+                  <span className="text-xs text-muted-foreground md:hidden">Actual</span>
+                  <span>{w.actual} min</span>
+                </div>
 
-                    <span className="text-center">{w.actual} min</span>
+                <div className="flex items-center justify-between text-sm text-muted-foreground md:block md:text-center">
+                  <span className="text-xs md:hidden">Recomendado</span>
+                  <span>{recommendedLabel}</span>
+                </div>
 
-                    <span className="text-center text-muted-foreground">{w.recommended === 0 ? 'Inmediato' : `${w.recommended} min`}</span>
-
-                    <span className={cn("text-center text-xs font-medium", exceeded ? "text-destructive" : "text-mts-4")}>
-
-                      {exceeded ? '⚠ Excede' : '✓ OK'}
-
-                    </span>
-
-                  </div>);
+                <div className="flex items-center justify-between md:block md:text-center">
+                  <span className="text-xs text-muted-foreground md:hidden">Estado</span>
+                  <span className={cn("text-sm font-medium md:text-xs", exceeded ? "text-destructive" : "text-mts-4")}>
+                    {exceeded ? '⚠ Excede' : '✓ OK'}
+                  </span>
+                </div>
+              </div>
+            );
         })}
 
             </div>

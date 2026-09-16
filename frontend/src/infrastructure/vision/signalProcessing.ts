@@ -193,18 +193,6 @@ export function detrend(signal: number[], windowSize: number): number[] {
   return signal.map((v, i) => v - trend[i]);
 }
 
-/**
- * Normalización z-score (media 0, desviación estándar 1).
- * Si la señal es constante (std = 0) devuelve una señal de ceros en vez de
- * dividir por cero.
- */
-export function normalize(signal: number[]): number[] {
-  const m = mean(signal);
-  const s = standardDeviation(signal);
-  if (s === 0) return signal.map(() => 0);
-  return signal.map(v => (v - m) / s);
-}
-
 // ─── Ventaneo previo a la FFT ───────────────────────────────────────────────
 
 /**
