@@ -154,16 +154,25 @@ def create_patient_from_kiosk(data: KioskPatientCreateRequest, db: Session = Dep
         pain_scale=data.vitalSigns.painScale,
         medical_history=[],
         hrv_rmssd=data.vitalSigns.hrv,
+        age=data.age,
     )
+
+    # date_of_birth es NOT NULL en el modelo (lo exige el formulario del médico,
+    # que sí captura una fecha real), pero el kiosco solo pide la edad en años,
+    # no la fecha de nacimiento completa. Se sintetiza una fecha con el año
+    # correcto (1 de enero) únicamente para satisfacer la columna — nada en la
+    # UI lee mes/día para pacientes de kiosco, solo `age` (que sí es el valor
+    # real capturado, no derivado de esta fecha).
+    synthetic_date_of_birth = datetime(datetime.utcnow().year - data.age, 1, 1).date()
 
     patient = models.Patient(
         first_name=data.firstName,
         last_name=data.lastName,
         document_type="CC",
         document_number=data.documentNumber,
-        date_of_birth=datetime(2000, 1, 1).date(),
-        age=0,
-        sex="Otro",
+        date_of_birth=synthetic_date_of_birth,
+        age=data.age,
+        sex=data.sex,
         chief_complaint="Registro por kiosco",
         symptoms=[],
         medical_history=[],

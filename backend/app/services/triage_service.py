@@ -17,6 +17,7 @@ class ITriageClassifier(ABC):
         pain_scale: int,
         medical_history: List[str],
         hrv_rmssd: Optional[float] = None,
+        age: Optional[int] = None,
     ) -> TriageResult:
         pass
 
@@ -32,6 +33,7 @@ class TriageService:
         pain_scale: int,
         medical_history: List[str],
         hrv_rmssd: Optional[float] = None,
+        age: Optional[int] = None,
     ) -> TriageResult:
         return self._classifier.classify(
             symptoms=symptoms,
@@ -39,6 +41,7 @@ class TriageService:
             pain_scale=pain_scale,
             medical_history=medical_history,
             hrv_rmssd=hrv_rmssd,
+            age=age,
         )
 
 
@@ -53,6 +56,7 @@ class ClassifyPatientUseCase:
         pain_scale: int,
         medical_history: List[str],
         hrv_rmssd: Optional[float] = None,
+        age: Optional[int] = None,
     ) -> TriageResult:
         return self._triage_service.classify_patient(
             symptoms=symptoms,
@@ -60,4 +64,5 @@ class ClassifyPatientUseCase:
             pain_scale=pain_scale,
             medical_history=medical_history,
             hrv_rmssd=hrv_rmssd,
+            age=age,
         )

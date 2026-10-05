@@ -28,13 +28,13 @@ SYMPTOM_LIST = [
 ]
 CONSCIOUSNESS_MAP = {"Alerta": 0, "Voz": 1, "Dolor": 2, "No responde": 3}
 
-# Base vitals (8) + HRV (1) + una bandera por síntoma conocido. Se define como
-# constante (en vez de dejar que _extract_features "simplemente tenga 21
-# elementos") para que _load_or_train pueda detectar cuándo el modelo
+# Base vitals (8) + HRV (1) + Age (1) + una bandera por síntoma conocido. Se
+# define como constante (en vez de dejar que _extract_features "simplemente
+# tenga N elementos") para que _load_or_train pueda detectar cuándo el modelo
 # guardado en disco quedó desalineado con el vector de features actual —
-# p. ej. al agregar HRV, el .pkl viejo entrenado con 20 features rompería
+# p. ej. al agregar HRV o Age, el .pkl viejo con menos features rompería
 # predict() con un error de forma en vez de fallar de manera legible.
-EXPECTED_FEATURE_COUNT = 9 + len(SYMPTOM_LIST)
+EXPECTED_FEATURE_COUNT = 10 + len(SYMPTOM_LIST)
 
 # Valor de HRV (RMSSD, ms) usado cuando no hay medición de cámara disponible
 # (paciente registrado por el médico, o medición del kiosco descartada por
@@ -43,6 +43,15 @@ EXPECTED_FEATURE_COUNT = 9 + len(SYMPTOM_LIST)
 # la clasificación de pacientes sin cámara hacia "estrés fisiológico" ni
 # hacia "sin estrés": es un relleno neutro, no una medición real.
 HRV_DEFAULT_WHEN_MISSING = 40.0
+
+# Edad usada cuando no se provee (llamadas existentes al classify() que aún
+# no pasan age, p. ej. el endpoint de triage manual /api/triage/classify).
+# Es un punto medio razonable de la población adulta general — igual que
+# HRV_DEFAULT_WHEN_MISSING, es un relleno neutro, no una medición real. Se
+# agrega porque Age es una variable con peso importante en el dataset KTAS
+# (Kaggle) que se usará para el próximo modelo — dejar el vector de features
+# preparado ahora evita otro reentrenamiento de esquema más adelante.
+AGE_DEFAULT_WHEN_MISSING = 45.0
 
 
 class TriageClassifier(ITriageClassifier):
@@ -82,6 +91,7 @@ class TriageClassifier(ITriageClassifier):
         vital_signs: VitalSigns,
         pain_scale: int,
         hrv_rmssd: Optional[float] = None,
+        age: Optional[int] = None,
     ) -> np.ndarray:
         features = [
             vital_signs.systolicBP,
@@ -93,6 +103,7 @@ class TriageClassifier(ITriageClassifier):
             CONSCIOUSNESS_MAP[vital_signs.consciousnessLevel],
             pain_scale,
             hrv_rmssd if hrv_rmssd is not None else HRV_DEFAULT_WHEN_MISSING,
+            age if age is not None else AGE_DEFAULT_WHEN_MISSING,
         ]
         for symptom in SYMPTOM_LIST:
             features.append(1 if symptom in symptoms else 0)
@@ -105,11 +116,13 @@ class TriageClassifier(ITriageClassifier):
         pain_scale: int,
         medical_history: List[str],
         hrv_rmssd: Optional[float] = None,
+        age: Optional[int] = None,
     ) -> TriageResult:
         # SpO2 ya influye en el nivel asignado vía oxygenSaturation (siempre
-        # fue parte del vector); HRV ahora también participa en la predicción
-        # del modelo, además de aparecer como factor informativo más abajo.
-        features = self._extract_features(symptoms, vital_signs, pain_scale, hrv_rmssd)
+        # fue parte del vector); HRV y Age también participan en la
+        # predicción del modelo, además de HRV aparecer como factor
+        # informativo más abajo.
+        features = self._extract_features(symptoms, vital_signs, pain_scale, hrv_rmssd, age)
         level = int(self._model.predict(features)[0])
         confidence = float(max(self._model.predict_proba(features)[0]))
 

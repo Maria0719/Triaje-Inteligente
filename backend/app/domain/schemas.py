@@ -127,6 +127,8 @@ class KioskPatientCreateRequest(BaseModel):
     lastName: str
     documentNumber: str
     eps: str
+    age: int = Field(ge=0, le=120)
+    sex: str
     vitalSigns: KioskVitalSignsPayload
     source: Literal["kiosk"]
 

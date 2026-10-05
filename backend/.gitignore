@@ -4,3 +4,4 @@ __pycache__/
 app/infrastructure/ml/triage_classifier.pkl
 .env
 triageai.db
+data/

@@ -36,7 +36,7 @@ import { IVitalSignsDetector, VitalSignsMeasurement } from '@/domain/ports/IVita
 import { SimulatedVitalSignsDetector } from '@/infrastructure/vision/SimulatedVitalSignsDetector';
 import { RppgVitalSignsDetector } from '@/infrastructure/vision/RppgVitalSignsDetector';
 import type { FaceCaptureQuality } from '@/infrastructure/vision/RoiSignalTypes';
-import type { ConsciousnessLevel } from '@/domain/entities/Patient';
+import type { ConsciousnessLevel, Sex } from '@/domain/entities/Patient';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
 
@@ -99,6 +99,13 @@ const EPS_OPTIONS = [
   'Comfenalco Valle',
   'Particular/No asegurado',
 ] as const;
+
+/** Mismos valores/etiquetas que usa el formulario manual del médico (NewPatientPage) para Sex. */
+const SEX_OPTIONS: { value: Sex; label: string }[] = [
+  { value: 'M', label: 'Masculino' },
+  { value: 'F', label: 'Femenino' },
+  { value: 'Otro', label: 'Otro' },
+];
 
 const CONSCIOUSNESS_OPTIONS: { value: ConsciousnessLevel; label: string; description: string }[] = [
   { value: 'Alerta',      label: 'Alerta',                   description: 'Estoy completamente despierto/a' },
@@ -178,6 +185,9 @@ export default function PatientKioskPage() {
   const [fullName, setFullName] = useState('');
   const [documentNumber, setDocumentNumber] = useState('');
   const [eps, setEps] = useState<(typeof EPS_OPTIONS)[number]>(EPS_OPTIONS[0]);
+  /** Edad en años, como texto mientras se escribe (se valida/convierte en onContinue). */
+  const [age, setAge] = useState('');
+  const [sex, setSex] = useState<Sex>(SEX_OPTIONS[0].value);
 
   // Paso 2: medición por cámara
   const [measurements, setMeasurements] = useState<Record<MeasurementKey, MeasurementState>>(createInitialMeasurements);
@@ -215,6 +225,8 @@ export default function PatientKioskPage() {
     setFullName('');
     setDocumentNumber('');
     setEps(EPS_OPTIONS[0]);
+    setAge('');
+    setSex(SEX_OPTIONS[0].value);
     setMeasurements(createInitialMeasurements());
     setMeasurementAttempts(0);
     setPainScale(null);
@@ -392,6 +404,8 @@ export default function PatientKioskPage() {
       lastName: nameParts.slice(1).join(' ') || 'Sin apellido',
       documentNumber,
       eps,
+      age: Number(age),
+      sex,
       vitalSigns: {
         heartRate:            detected.heartRate.value,
         respiratoryRate:      detected.respiratoryRate.value,
@@ -441,8 +455,13 @@ export default function PatientKioskPage() {
   }, [step, success]);
 
   const onContinue = () => {
+    const ageNumber = Number(age);
     if (!fullName.trim() || !documentNumber.trim() || !eps) {
       setError('Completa todos los campos para continuar.');
+      return;
+    }
+    if (!age.trim() || !Number.isInteger(ageNumber) || ageNumber < 0 || ageNumber > 120) {
+      setError('Ingresa una edad válida (0 a 120 años).');
       return;
     }
     setError('');
@@ -488,6 +507,32 @@ export default function PatientKioskPage() {
                   inputMode="numeric"
                   placeholder="Numero de documento"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-lg font-semibold text-slate-800 mb-2">Edad</label>
+                  <input
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    value={age}
+                    onChange={e => setAge(e.target.value.replace(/\D/g, ''))}
+                    inputMode="numeric"
+                    placeholder="Anos"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-lg font-semibold text-slate-800 mb-2">Sexo</label>
+                  <select
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    value={sex}
+                    onChange={e => setSex(e.target.value as Sex)}
+                  >
+                    {SEX_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
